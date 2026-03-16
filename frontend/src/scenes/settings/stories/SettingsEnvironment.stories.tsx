@@ -107,6 +107,9 @@ SettingsEnvironmentFeatureFlags.args = { sectionId: 'environment-feature-flags' 
 export const SettingsEnvironmentErrorTracking: Story = Template.bind({})
 SettingsEnvironmentErrorTracking.args = { sectionId: 'environment-error-tracking' }
 
+export const SettingsEnvironmentErrorTrackingConfiguration: Story = Template.bind({})
+SettingsEnvironmentErrorTrackingConfiguration.args = { sectionId: 'environment-error-tracking-configuration' }
+
 export const SettingsEnvironmentCSPReporting: Story = Template.bind({})
 SettingsEnvironmentCSPReporting.args = { sectionId: 'environment-csp-reporting' }
 
