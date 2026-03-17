@@ -14,6 +14,7 @@ from posthog.settings import EE_AVAILABLE
 import products.logs.backend.api as logs
 import products.links.backend.api as link
 import products.tasks.backend.api as tasks
+import products.tasks.backend.seat_api as code_seats
 import products.endpoints.backend.api as endpoints
 import products.mcp_store.backend.api as mcp_store
 import products.signals.backend.views as signals
@@ -287,6 +288,9 @@ project_tasks_router.register(r"runs", tasks.TaskRunViewSet, "project_task_runs"
 
 # PostHog Code invites (not project-scoped)
 router.register(r"code/invites", tasks.CodeInviteViewSet, "code_invites")
+
+# PostHog Code seats (proxied to billing service)
+router.register(r"code/seats", code_seats.CodeSeatViewSet, "code_seats")
 
 # Signal reports endpoints
 projects_router.register(r"signal_reports", signals.SignalReportViewSet, "project_signal_reports", ["team_id"])
