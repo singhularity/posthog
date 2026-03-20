@@ -25,6 +25,8 @@ Schema reference for PostHog's core system models, organized by domain:
 - [Hog Flows](./references/models-hog-flows.md)
 - [Hog Functions](./references/models-hog-functions.md)
 - [Notebooks](./references/models-notebooks.md)
+- [Session Recording Playlists](./references/models-session-recording-playlists.md)
+- [Session Recordings](./references/models-session-recordings.md)
 - [Surveys](./references/models-surveys.md)
 - [SQL Variables](./references/models-variables.md)
 - [Skipped events in the read-data-schema tool](./references/taxonomy-skipped-events.md)
