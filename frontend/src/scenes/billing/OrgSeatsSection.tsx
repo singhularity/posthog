@@ -1,4 +1,5 @@
 import { useActions, useValues } from 'kea'
+import { useEffect } from 'react'
 
 import { LemonButton, LemonDialog, LemonTable, LemonTag } from '@posthog/lemon-ui'
 import { lemonToast } from '@posthog/lemon-ui'
@@ -19,6 +20,17 @@ function planLabel(planKey: string): string {
     return 'Free'
 }
 
+function formatSeatDate(value: string | number | null): string {
+    if (!value) {
+        return '–'
+    }
+    const parsed = typeof value === 'number' ? dayjs.unix(value) : dayjs(value)
+    if (!parsed.isValid() || parsed.year() <= 1970) {
+        return '–'
+    }
+    return parsed.format('MMM D, YYYY')
+}
+
 function statusColor(status: string): 'success' | 'warning' | 'muted' | 'primary' {
     switch (status) {
         case 'active':
@@ -37,6 +49,11 @@ export function OrgSeatsSection(): JSX.Element {
     const { orgSeats, orgSeatsLoading } = useValues(seatBillingLogic)
     const { loadOrgSeats } = useActions(seatBillingLogic)
     const { members } = useValues(membersLogic)
+    const { ensureAllMembersLoaded } = useActions(membersLogic)
+
+    useEffect(() => {
+        ensureAllMembersLoaded()
+    }, [])
 
     const activeCount = orgSeats.filter((s) => s.status === 'active').length
     const cancelingCount = orgSeats.filter((s) => s.status === 'canceling').length
@@ -117,7 +134,7 @@ export function OrgSeatsSection(): JSX.Element {
                                     </div>
                                 )
                             }
-                            return <span className="text-muted">{seat.user_distinct_id}</span>
+                            return <span className="text-muted">{seat.user_distinct_id.slice(0, 8)}...</span>
                         },
                     },
                     {
@@ -137,16 +154,14 @@ export function OrgSeatsSection(): JSX.Element {
                         ),
                     },
                     {
-                        title: 'Active from',
+                        title: 'Started',
                         key: 'active_from',
-                        render: (_, seat: SeatData) =>
-                            seat.active_from ? dayjs(seat.active_from).format('MMM D, YYYY') : '–',
+                        render: (_, seat: SeatData) => formatSeatDate(seat.active_from),
                     },
                     {
-                        title: 'Active until',
+                        title: 'Expires',
                         key: 'active_until',
-                        render: (_, seat: SeatData) =>
-                            seat.active_until ? dayjs(seat.active_until).format('MMM D, YYYY') : '–',
+                        render: (_, seat: SeatData) => formatSeatDate(seat.active_until),
                     },
                     {
                         title: '',

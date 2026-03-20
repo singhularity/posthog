@@ -23,9 +23,9 @@ export interface SeatData {
     plan_key: string
     status: SeatStatus
     end_reason: string | null
-    created_at: string
-    active_until: string | null
-    active_from: string | null
+    created_at: string | number
+    active_until: string | number | null
+    active_from: string | number | null
 }
 
 export interface BillingFilters {
