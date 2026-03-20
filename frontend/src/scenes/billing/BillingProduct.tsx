@@ -104,8 +104,9 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
     // Used when a product is offered for free to beta users, so we want to show usage but
     // there is no pricing (aka tiers) and no free_allotment
     const isTemporaryFreeProduct =
-        (!product.tiered && !product.free_allocation && !product.inclusion_only) ||
-        (product.tiered && product.tiers?.length === 1 && product.tiers[0].unit_amount_usd === '0')
+        product.type !== CODE_PRODUCT_KEY &&
+        ((!product.tiered && !product.free_allocation && !product.inclusion_only) ||
+            (product.tiered && product.tiers?.length === 1 && product.tiers[0].unit_amount_usd === '0'))
 
     // If the feature flag `billing_hide_product_{product.type}` is true,
     // don't show the product in the billing page.
