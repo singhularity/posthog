@@ -31,7 +31,8 @@ import { billingLogic } from './billingLogic'
 import { BillingProductAddon } from './BillingProductAddon'
 import { billingProductLogic } from './billingProductLogic'
 import { BillingProductPricingTable } from './BillingProductPricingTable'
-import { REALTIME_DESTINATIONS_BILLING_START_DATE } from './constants'
+import { CODE_PRODUCT_KEY, REALTIME_DESTINATIONS_BILLING_START_DATE } from './constants'
+import { CodeSeatsSection } from './CodeSeatsSection'
 import { paymentEntryLogic } from './paymentEntryLogic'
 import { ProductPricingModal } from './ProductPricingModal'
 import { UnsubscribeSurveyModal } from './UnsubscribeSurveyModal'
@@ -208,6 +209,12 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
                     </div>
                 </div>
                 <div className="px-8 pb-8 sm:pb-0">
+                    {product.type === CODE_PRODUCT_KEY ? (
+                        <div className="py-4">
+                            <CodeSeatsSection />
+                        </div>
+                    ) : (
+                    <>
                     {/* Exceeded limit notice */}
                     {product.percentage_usage > 1 && (
                         <LemonBanner className="mt-6" type="error">
@@ -527,7 +534,7 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
                     {showTierBreakdown && <BillingProductPricingTable product={product} />}
 
                     {/* Add-ons (hide for product variants) */}
-                    {product.addons?.length > 0 && !isProductWithVariants && (
+                    {product.addons?.length > 0 && !isProductWithVariants && product.type !== CODE_PRODUCT_KEY && (
                         <div className="pb-8">
                             {/* Legacy teams addon */}
                             {product.type === 'platform_and_support' &&
@@ -572,6 +579,8 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
                                 })}
                             </div>
                         </div>
+                    )}
+                    </>
                     )}
                 </div>
 

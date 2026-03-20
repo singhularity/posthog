@@ -45,7 +45,7 @@ function statusColor(status: string): 'success' | 'warning' | 'muted' | 'primary
     }
 }
 
-export function OrgSeatsSection(): JSX.Element {
+export function CodeSeatsSection(): JSX.Element {
     const { orgSeats, orgSeatsLoading } = useValues(seatBillingLogic)
     const { loadOrgSeats } = useActions(seatBillingLogic)
     const { members } = useValues(membersLogic)
@@ -110,7 +110,7 @@ export function OrgSeatsSection(): JSX.Element {
         <div>
             <div className="flex items-center justify-between mb-4">
                 <div>
-                    <h3 className="mb-1 text-lg font-semibold">Organization seats</h3>
+                    <h3 className="mb-1 text-lg font-semibold">Code seats</h3>
                     <span className="text-muted text-sm">
                         {activeCount} active{cancelingCount > 0 ? `, ${cancelingCount} canceling` : ''} &middot; $
                         {monthlyTotal}/mo
