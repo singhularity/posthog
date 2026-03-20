@@ -101,10 +101,12 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
         700: 'medium',
     })
 
+    const isSeatBasedProduct = !product.usage_key
+
     // Used when a product is offered for free to beta users, so we want to show usage but
     // there is no pricing (aka tiers) and no free_allotment
     const isTemporaryFreeProduct =
-        product.type !== CODE_PRODUCT_KEY &&
+        !isSeatBasedProduct &&
         ((!product.tiered && !product.free_allocation && !product.inclusion_only) ||
             (product.tiered && product.tiers?.length === 1 && product.tiers[0].unit_amount_usd === '0'))
 
@@ -586,7 +588,7 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
                 </div>
 
                 {/* Billing limit */}
-                {!isTemporaryFreeProduct && (
+                {!isTemporaryFreeProduct && !isSeatBasedProduct && (
                     <div className={isProductWithVariants ? 'mt-8' : ''}>
                         <BillingLimit product={product} />
                     </div>

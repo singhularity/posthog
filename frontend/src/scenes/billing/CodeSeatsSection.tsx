@@ -9,6 +9,7 @@ import { dayjs } from 'lib/dayjs'
 import { More } from 'lib/lemon-ui/LemonButton/More'
 import { membersLogic } from 'scenes/organization/membersLogic'
 
+import { billingLogic } from './billingLogic'
 import { CODE_PLAN_FREE, CODE_PLAN_PRO, CODE_PRODUCT_KEY } from './constants'
 import { seatBillingLogic } from './seatBillingLogic'
 import type { SeatData } from './types'
@@ -48,6 +49,7 @@ function statusColor(status: string): 'success' | 'warning' | 'muted' | 'primary
 export function CodeSeatsSection(): JSX.Element {
     const { orgSeats, orgSeatsLoading } = useValues(seatBillingLogic)
     const { loadOrgSeats } = useActions(seatBillingLogic)
+    const { billing } = useValues(billingLogic)
     const { members } = useValues(membersLogic)
     const { ensureAllMembersLoaded } = useActions(membersLogic)
 
@@ -55,9 +57,28 @@ export function CodeSeatsSection(): JSX.Element {
         ensureAllMembersLoaded()
     }, [])
 
-    const activeCount = orgSeats.filter((s) => s.status === 'active').length
-    const cancelingCount = orgSeats.filter((s) => s.status === 'canceling').length
-    const proCount = orgSeats.filter((s) => s.plan_key === CODE_PLAN_PRO && s.status === 'active').length
+    const STATUS_PRIORITY: Record<string, number> = {
+        active: 0,
+        canceling: 1,
+        pending_payment: 2,
+        pending: 3,
+        expired: 4,
+        withdrawn: 5,
+    }
+
+    const displaySeats = Object.values(
+        orgSeats.reduce<Record<string, SeatData>>((acc, seat) => {
+            const existing = acc[seat.user_distinct_id]
+            if (!existing || (STATUS_PRIORITY[seat.status] ?? 99) < (STATUS_PRIORITY[existing.status] ?? 99)) {
+                acc[seat.user_distinct_id] = seat
+            }
+            return acc
+        }, {})
+    )
+
+    const activeCount = displaySeats.filter((s) => s.status === 'active').length
+    const cancelingCount = displaySeats.filter((s) => s.status === 'canceling').length
+    const proCount = displaySeats.filter((s) => s.plan_key === CODE_PLAN_PRO && s.status === 'active').length
     const monthlyTotal = proCount * 200
 
     function getUserInfo(seat: SeatData): { name: string; email: string } | null {
@@ -119,7 +140,7 @@ export function CodeSeatsSection(): JSX.Element {
             </div>
             <LemonTable
                 loading={orgSeatsLoading}
-                dataSource={orgSeats}
+                dataSource={displaySeats}
                 columns={[
                     {
                         title: 'User',
@@ -168,6 +189,9 @@ export function CodeSeatsSection(): JSX.Element {
                         key: 'actions',
                         width: 0,
                         render: (_, seat: SeatData) => {
+                            if (!billing?.has_active_subscription) {
+                                return null
+                            }
                             const canUpgrade = seat.status === 'active' && seat.plan_key === CODE_PLAN_FREE
                             const canCancel = seat.status === 'active'
                             const canReactivate = seat.status === 'canceling'
