@@ -19,9 +19,9 @@ logger = structlog.get_logger(__name__)
 REQUEST_TIMEOUT_SECONDS = 30
 
 
-class CodeSeatViewSet(viewsets.ViewSet):
+class SeatViewSet(viewsets.ViewSet):
     """
-    Proxy for PostHog Code seat management through the billing service.
+    Proxy for seat management through the billing service.
 
     All endpoints resolve ``me`` in the URL to the requesting user's
     ``distinct_id``, build a billing JWT and forward the request to the
@@ -101,7 +101,7 @@ class CodeSeatViewSet(viewsets.ViewSet):
     # ------------------------------------------------------------------
 
     def create(self, request):
-        """POST /api/code/seats/ -> POST /api/v2/seats/"""
+        """POST /api/seats/ -> POST /api/v2/seats/"""
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -110,7 +110,7 @@ class CodeSeatViewSet(viewsets.ViewSet):
         return self._forward_response(resp)
 
     def retrieve(self, request, pk=None):
-        """GET /api/code/seats/me/ -> GET /api/v2/seats/{distinct_id}/?product_key="""
+        """GET /api/seats/me/ -> GET /api/v2/seats/{distinct_id}/?product_key="""
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -125,7 +125,7 @@ class CodeSeatViewSet(viewsets.ViewSet):
         return self._forward_response(resp)
 
     def partial_update(self, request, pk=None):
-        """PATCH /api/code/seats/me/ -> PATCH /api/v2/seats/{distinct_id}/"""
+        """PATCH /api/seats/me/ -> PATCH /api/v2/seats/{distinct_id}/"""
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -140,7 +140,7 @@ class CodeSeatViewSet(viewsets.ViewSet):
         return self._forward_response(resp)
 
     def destroy(self, request, pk=None):
-        """DELETE /api/code/seats/me/?product_key= -> DELETE /api/v2/seats/{distinct_id}/?product_key="""
+        """DELETE /api/seats/me/?product_key= -> DELETE /api/v2/seats/{distinct_id}/?product_key="""
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -156,7 +156,7 @@ class CodeSeatViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["post"], url_path="reactivate")
     def reactivate(self, request, pk=None):
-        """POST /api/code/seats/me/reactivate/ -> POST /api/v2/seats/{distinct_id}/reactivate/"""
+        """POST /api/seats/me/reactivate/ -> POST /api/v2/seats/{distinct_id}/reactivate/"""
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
