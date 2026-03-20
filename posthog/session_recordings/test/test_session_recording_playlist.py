@@ -216,20 +216,26 @@ class TestSessionRecordingPlaylist(APIBaseTest, QueryMatchingTest):
             },
         ]
 
-    @parameterized.expand(
-        [
-            ["without_type", {"name": "test"}],
-            ["with_unknown_type", {"name": "test", "type": "tomato"}],
-        ]
-    )
-    def test_rejects_invalid_playlist_type(self, _name: str, playlist_data: dict) -> None:
+    def test_rejects_playlist_without_type(self) -> None:
         self._create_playlist(
-            playlist_data,
+            {"name": "test"},
             status.HTTP_400_BAD_REQUEST,
             expected_response_json={
                 "attr": None,
                 "code": "invalid_input",
                 "detail": "Must provide a valid playlist type: either filters or collection",
+                "type": "validation_error",
+            },
+        )
+
+    def test_rejects_playlist_with_unknown_type(self) -> None:
+        self._create_playlist(
+            {"name": "test", "type": "tomato"},
+            status.HTTP_400_BAD_REQUEST,
+            expected_response_json={
+                "attr": "type",
+                "code": "invalid_choice",
+                "detail": '"tomato" is not a valid choice.',
                 "type": "validation_error",
             },
         )
