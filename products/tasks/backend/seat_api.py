@@ -3,20 +3,29 @@ import structlog
 from rest_framework import status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotAuthenticated
+from rest_framework.exceptions import NotAuthenticated, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from posthog.auth import OAuthAccessTokenAuthentication, PersonalAPIKeyAuthentication
 from posthog.cloud_utils import get_cached_instance_license
+from posthog.models.organization import OrganizationMembership
 
 from ee.billing.billing_manager import build_billing_token
 from ee.settings import BILLING_SERVICE_URL
 
-
 logger = structlog.get_logger(__name__)
 
 REQUEST_TIMEOUT_SECONDS = 30
+
+
+def _is_org_admin(user) -> bool:
+    org = user.organization
+    if not org:
+        return False
+    return OrganizationMembership.objects.filter(
+        user=user, organization=org, level__gte=OrganizationMembership.Level.ADMIN
+    ).exists()
 
 
 class SeatViewSet(viewsets.ViewSet):
@@ -96,9 +105,29 @@ class SeatViewSet(viewsets.ViewSet):
             logger.exception("Billing service request failed", path=path, method=method)
             return None
 
+    def _require_admin(self, request) -> None:
+        if not _is_org_admin(request.user):
+            raise PermissionDenied("Only organization admins can perform this action.")
+
     # ------------------------------------------------------------------
     # Endpoints
     # ------------------------------------------------------------------
+
+    def list(self, request):
+        """GET /api/seats/?product_key= -> GET /api/v2/seats/"""
+        self._require_admin(request)
+
+        headers = self._get_billing_headers(request)
+        if not headers:
+            return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
+
+        resp = self._billing_request(
+            "GET",
+            "/api/v2/seats/",
+            headers,
+            query_params=request.query_params.dict(),
+        )
+        return self._forward_response(resp, extract_seat=False)
 
     def create(self, request):
         """POST /api/seats/ -> POST /api/v2/seats/"""
@@ -111,6 +140,9 @@ class SeatViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         """GET /api/seats/me/ -> GET /api/v2/seats/{distinct_id}/?product_key="""
+        if pk != "me":
+            self._require_admin(request)
+
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -126,6 +158,9 @@ class SeatViewSet(viewsets.ViewSet):
 
     def partial_update(self, request, pk=None):
         """PATCH /api/seats/me/ -> PATCH /api/v2/seats/{distinct_id}/"""
+        if pk != "me":
+            self._require_admin(request)
+
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -141,6 +176,9 @@ class SeatViewSet(viewsets.ViewSet):
 
     def destroy(self, request, pk=None):
         """DELETE /api/seats/me/?product_key= -> DELETE /api/v2/seats/{distinct_id}/?product_key="""
+        if pk != "me":
+            self._require_admin(request)
+
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -157,6 +195,9 @@ class SeatViewSet(viewsets.ViewSet):
     @action(detail=True, methods=["post"], url_path="reactivate")
     def reactivate(self, request, pk=None):
         """POST /api/seats/me/reactivate/ -> POST /api/v2/seats/{distinct_id}/reactivate/"""
+        if pk != "me":
+            self._require_admin(request)
+
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
