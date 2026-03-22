@@ -19,7 +19,7 @@ import isEqual from 'lodash.isequal'
 import { Uri, editor } from 'monaco-editor'
 import posthog from 'posthog-js'
 
-import { LemonCheckbox, LemonDialog, LemonInput, lemonToast, Tooltip } from '@posthog/lemon-ui'
+import { LemonCheckbox, LemonDialog, LemonInput, Tooltip, lemonToast } from '@posthog/lemon-ui'
 
 import api from 'lib/api'
 import { SetupTaskId, globalSetupLogic } from 'lib/components/ProductSetup'
@@ -59,15 +59,17 @@ import {
     ChartDisplayType,
     DataWarehouseSavedQuery,
     DataWarehouseSavedQueryDraft,
-    ExternalDataSource,
     ExportContext,
+    ExternalDataSource,
     LineageGraph,
     QueryBasedInsightModel,
 } from '~/types'
 
+import { DagSelector } from 'products/data_modeling/frontend/DagSelector'
 import { validateEndpointName } from 'products/endpoints/frontend/common'
 
 import { dataWarehouseViewsLogic } from '../saved_queries/dataWarehouseViewsLogic'
+import { dataModelingLogic } from '../scene/dataModelingLogic'
 import { draftsLogic } from './draftsLogic'
 import { editorSceneLogic } from './editorSceneLogic'
 import { fixSQLErrorsLogic } from './fixSQLErrorsLogic'
@@ -195,6 +197,8 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
             ['database', 'databaseLoading'],
             outputPaneLogic({ tabId: props.tabId }),
             ['activeTab as outputActiveTab'],
+            dataModelingLogic,
+            ['dags', 'selectedDagId'],
         ],
         actions: [
             dataWarehouseViewsLogic,
@@ -241,17 +245,27 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
 
         initialize: true,
         loadUpstream: (modelId: string) => ({ modelId }),
-        saveAsView: (materializeAfterSave = false, fromDraft?: string) => ({ fromDraft, materializeAfterSave }),
-        saveAsViewSubmit: (name: string, materializeAfterSave = false, fromDraft?: string, isTest = false) => ({
+        saveAsView: (materializeAfterSave = false, fromDraft?: string) => ({
             fromDraft,
+            materializeAfterSave,
+        }),
+        saveAsViewSubmit: (
+            name: string,
+            materializeAfterSave = false,
+            fromDraft?: string,
+            dagId?: string,
+            isTest = false
+        ) => ({
             name,
             materializeAfterSave,
+            fromDraft,
+            dagId,
             isTest,
         }),
         saveAsInsight: true,
         saveAsInsightSubmit: (name: string) => ({ name }),
         saveAsEndpoint: true,
-        saveAsEndpointSubmit: (name: string, description?: string) => ({ name, description }),
+        saveAsEndpointSubmit: (name: string, description?: string, dagId?: string) => ({ name, description, dagId }),
         updateInsight: true,
         setFinishedLoading: (loading: boolean) => ({ loading }),
         setError: (error: string | null) => ({ error }),
@@ -261,31 +275,53 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
         setMetadataLoading: (loading: boolean) => ({ loading }),
         setInsightLoading: (loading: boolean) => ({ loading }),
         setViewLoading: (loading: boolean) => ({ loading }),
-        editView: (query: string, view: DataWarehouseSavedQuery) => ({ query, view }),
-        editInsight: (query: string, insight: QueryBasedInsightModel) => ({ query, insight }),
-        setLastRunQuery: (lastRunQuery: DataVisualizationNode | null) => ({ lastRunQuery }),
+        editView: (query: string, view: DataWarehouseSavedQuery) => ({
+            query,
+            view,
+        }),
+        editInsight: (query: string, insight: QueryBasedInsightModel) => ({
+            query,
+            insight,
+        }),
+        setLastRunQuery: (lastRunQuery: DataVisualizationNode | null) => ({
+            lastRunQuery,
+        }),
         _setSuggestionPayload: (payload: SuggestionPayload | null) => ({ payload }),
         setSuggestedQueryInput: (suggestedQueryInput: string, source?: SuggestionPayload['source']) => ({
             suggestedQueryInput,
             source,
         }),
-        onAcceptSuggestedQueryInput: (shouldRunQuery?: boolean) => ({ shouldRunQuery }),
+        onAcceptSuggestedQueryInput: (shouldRunQuery?: boolean) => ({
+            shouldRunQuery,
+        }),
         onRejectSuggestedQueryInput: true,
         shareTab: true,
         openHistoryModal: true,
         closeHistoryModal: true,
-        setInProgressViewEdit: (viewId: string, historyId: string) => ({ viewId, historyId }),
+        setInProgressViewEdit: (viewId: string, historyId: string) => ({
+            viewId,
+            historyId,
+        }),
         setInProgressViewEdits: (inProgressViewEdits: Record<DataWarehouseSavedQuery['id'], string>) => ({
             inProgressViewEdits,
         }),
         deleteInProgressViewEdit: (viewId: string) => ({ viewId }),
-        setInProgressDraftEdit: (draftId: string, historyId: string) => ({ draftId, historyId }),
+        setInProgressDraftEdit: (draftId: string, historyId: string) => ({
+            draftId,
+            historyId,
+        }),
         setInProgressDraftEdits: (inProgressDraftEdits: Record<DataWarehouseSavedQueryDraft['id'], string>) => ({
             inProgressDraftEdits,
         }),
         deleteInProgressDraftEdit: (draftId: string) => ({ draftId }),
-        updateView: (view: UpdateViewPayload, draftId?: string) => ({ view, draftId }),
-        updateViewSuccess: (view: UpdateViewPayload, draftId?: string) => ({ view, draftId }),
+        updateView: (view: UpdateViewPayload, draftId?: string) => ({
+            view,
+            draftId,
+        }),
+        updateViewSuccess: (view: UpdateViewPayload, draftId?: string) => ({
+            view,
+            draftId,
+        }),
         setUpstreamViewMode: (mode: 'graph' | 'table') => ({ mode }),
         setHoveredNode: (nodeId: string | null) => ({ nodeId }),
         saveDraft: (activeTab: QueryTab, queryInput: string, viewId: string) => ({
@@ -461,7 +497,9 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
         fixErrorsSuccess: ({ response }) => {
             actions.setSuggestedQueryInput(response.query, 'hogql_fixer')
 
-            posthog.capture('ai-error-fixer-success', { trace_id: response.trace_id })
+            posthog.capture('ai-error-fixer-success', {
+                trace_id: response.trace_id,
+            })
         },
         fixErrorsFailure: () => {
             posthog.capture('ai-error-fixer-failure')
@@ -603,7 +641,9 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                     }
                 }
             }
-            posthog.capture('sql-editor-accepted-suggestion', { source: values.suggestedSource })
+            posthog.capture('sql-editor-accepted-suggestion', {
+                source: values.suggestedSource,
+            })
             actions._setSuggestionPayload(null)
         },
         onRejectSuggestedQueryInput: () => {
@@ -650,7 +690,9 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                     }
                 }
             }
-            posthog.capture('sql-editor-rejected-suggestion', { source: values.suggestedSource })
+            posthog.capture('sql-editor-rejected-suggestion', {
+                source: values.suggestedSource,
+            })
             actions._setSuggestionPayload(null)
         },
         editView: ({ query, view }) => {
@@ -788,10 +830,22 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
             globalSetupLogic.findMounted()?.actions.markTaskAsCompleted(SetupTaskId.RunFirstQuery)
         },
         saveAsView: async ({ fromDraft, materializeAfterSave = false }) => {
+            // Ensure DAGs are loaded via dataModelingLogic
+            if (values.dags.length === 0) {
+                await dataModelingLogic.asyncActions.loadDags()
+            }
+
+            const capturedDags = values.dags
             const isStaff = values.user?.is_staff ?? false
+
             LemonDialog.openForm({
                 title: 'Save as view',
-                initialValues: { viewName: values.activeTab?.name || '', isTest: false },
+                initialValues: {
+                    viewName: values.activeTab?.name || '',
+                    dagId: values.selectedDagId ?? null,
+                    dagName: null as string | null,
+                    isTest: false,
+                },
                 description: `View names can only contain letters, numbers, '_', or '$'. Spaces are not allowed.`,
                 content: (isLoading) =>
                     isLoading ? (
@@ -825,6 +879,21 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                                     )}
                                 </LemonField>
                             )}
+                            <LemonField name="dagId" label="DAG" className="mt-2">
+                                {({ value: dagId, onChange: setDagId }) => (
+                                    <LemonField name="dagName">
+                                        {({ value: dagName, onChange: setDagName }) => (
+                                            <DagSelector
+                                                dags={capturedDags}
+                                                selectedDagId={dagId}
+                                                dagName={dagName}
+                                                onSelectDag={setDagId}
+                                                onDagName={setDagName}
+                                            />
+                                        )}
+                                    </LemonField>
+                                )}
+                            </LemonField>
                         </>
                     ),
                 errors: {
@@ -834,14 +903,40 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                             : !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
                               ? 'Name must be valid'
                               : undefined,
+                    dagName: (dagName) => {
+                        if (!dagName) {
+                            return undefined
+                        }
+                        if (!dagName.trim()) {
+                            return 'DAG name is required'
+                        }
+                        if (capturedDags.some((d) => d.name === dagName.trim())) {
+                            return 'A DAG with this name already exists'
+                        }
+                        return undefined
+                    },
                 },
-                onSubmit: async ({ viewName, isTest }) => {
-                    await asyncActions.saveAsViewSubmit(viewName, materializeAfterSave, fromDraft, isTest)
+                onSubmit: async ({ viewName, dagId, dagName, isTest }) => {
+                    let resolvedDagId = dagId ?? undefined
+                    if (dagName && dagName.trim()) {
+                        const newDag = await api.dataModelingDags.create({ name: dagName.trim() })
+                        resolvedDagId = newDag.id
+                    }
+                    await asyncActions.saveAsViewSubmit(
+                        viewName,
+                        materializeAfterSave,
+                        fromDraft,
+                        resolvedDagId,
+                        isTest ?? false
+                    )
+                    if (resolvedDagId) {
+                        dataModelingLogic.actions.setSelectedDagId(resolvedDagId)
+                    }
                 },
                 shouldAwaitSubmit: true,
             })
         },
-        saveAsViewSubmit: async ({ name, materializeAfterSave = false, fromDraft, isTest = false }) => {
+        saveAsViewSubmit: async ({ name, materializeAfterSave = false, fromDraft, dagId, isTest = false }) => {
             const query: HogQLQuery = values.sourceQuery.source
 
             const queryToSave = {
@@ -861,6 +956,7 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                     name,
                     query: queryToSave,
                     types,
+                    ...(dagId ? { dag_id: dagId } : {}),
                     ...(isTest ? { is_test: true } : {}),
                 })
 
@@ -874,6 +970,9 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                 if (fromDraft) {
                     actions.deleteDraft(fromDraft, savedQuery?.name)
                 }
+
+                // reload DAGs so newly created default DAG appears
+                dataModelingLogic.findMounted()?.actions.loadDags()
             } catch {
                 lemonToast.error('Failed to save view')
             }
@@ -947,7 +1046,10 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                 doNotLoad: true,
             })
             const umount = logic.mount()
-            logic.actions.setInsight(insight, { fromPersistentApi: true, overrideQuery: true })
+            logic.actions.setInsight(insight, {
+                fromPersistentApi: true,
+                overrideQuery: true,
+            })
             const timeoutId = window.setTimeout(() => umount(), 1000 * 10) // keep mounted for 10 seconds while we redirect
             cache.timeouts = cache.timeouts || []
             cache.timeouts.push(timeoutId)
@@ -1028,7 +1130,10 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                 dashboardId: undefined,
             })
             if (loadedLogic) {
-                loadedLogic.actions.setInsight(savedInsight, { overrideQuery: true, fromPersistentApi: true })
+                loadedLogic.actions.setInsight(savedInsight, {
+                    overrideQuery: true,
+                    fromPersistentApi: true,
+                })
             }
 
             lemonToast.info(
@@ -1042,7 +1147,10 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                 const updatedView = dataWarehouseSavedQueries.find((v) => v.id === values.activeTab?.view?.id)
                 if (updatedView && values.activeTab) {
                     // Preserve the query from the active tab since list response doesn't include it
-                    const viewWithQuery = { ...updatedView, query: values.activeTab.view.query }
+                    const viewWithQuery = {
+                        ...updatedView,
+                        query: values.activeTab.view.query,
+                    }
                     actions.updateTab({ ...values.activeTab, view: viewWithQuery })
                 }
             }
@@ -1366,7 +1474,9 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                 if (editingView) {
                     return {
                         name: editingView.name,
-                        resourceType: { type: editingView.is_materialized ? 'matview' : 'view' },
+                        resourceType: {
+                            type: editingView.is_materialized ? 'matview' : 'view',
+                        },
                     }
                 }
 
@@ -1638,7 +1748,9 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                         insight.query &&
                         !searchParams.open_query
                     ) {
-                        const mountedDataLogic = dataNodeLogic.findMounted({ key: values.dataLogicKey })
+                        const mountedDataLogic = dataNodeLogic.findMounted({
+                            key: values.dataLogicKey,
+                        })
                         const response = mountedDataLogic?.values.response
                         const responseLoading = mountedDataLogic?.values.responseLoading ?? false
 
