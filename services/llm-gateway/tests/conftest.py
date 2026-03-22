@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 
 from llm_gateway.auth.models import AuthenticatedUser
 from llm_gateway.main import http_exception_handler
+from llm_gateway.services.plan_resolver import PlanInfo
 from llm_gateway.rate_limiting.cost_throttles import (
     ProductCostThrottle,
     UserCostBurstThrottle,
@@ -36,6 +37,9 @@ def create_test_app(
         app.state.db_pool = mock_db_pool
         app.state.redis = None
         app.state.throttle_runner = ThrottleRunner(throttles=throttles if throttles is not None else default_throttles)
+        app.state.http_client = MagicMock()
+        app.state.plan_resolver = AsyncMock()
+        app.state.plan_resolver.get_plan = AsyncMock(return_value=PlanInfo(plan_key=None, in_trial_period=True))
         yield
 
     app = FastAPI(title="LLM Gateway Test", lifespan=test_lifespan)

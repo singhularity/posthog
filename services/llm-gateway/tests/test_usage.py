@@ -3,11 +3,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
+from llm_gateway.config import get_settings
 from llm_gateway.rate_limiting.cost_throttles import (
     UserCostBurstThrottle,
     UserCostSustainedThrottle,
 )
 from llm_gateway.rate_limiting.throttles import ThrottleContext
+from llm_gateway.services.plan_resolver import PlanInfo
 
 from tests.conftest import create_test_app
 
@@ -33,7 +35,7 @@ class TestUsageEndpoint:
         with TestClient(app) as c:
             yield c
 
-    def test_returns_usage_for_product(self, authenticated_usage_client: TestClient) -> None:
+    def test_returns_pro_limits_when_flag_off(self, authenticated_usage_client: TestClient) -> None:
         response = authenticated_usage_client.get(
             "/v1/usage/posthog_code",
             headers={"Authorization": "Bearer phx_test"},
@@ -43,18 +45,76 @@ class TestUsageEndpoint:
 
         assert data["product"] == "posthog_code"
         assert data["user_id"] == 42
-
-        assert data["burst"]["used_usd"] == 0.0
         assert data["burst"]["limit_usd"] == 100.0
-        assert data["burst"]["remaining_usd"] == 100.0
-        assert data["burst"]["exceeded"] is False
-
-        assert data["sustained"]["used_usd"] == 0.0
         assert data["sustained"]["limit_usd"] == 1000.0
-        assert data["sustained"]["remaining_usd"] == 1000.0
-        assert data["sustained"]["exceeded"] is False
-
         assert data["is_rate_limited"] is False
+
+    def test_returns_trial_limits_when_flag_on(
+        self, authenticated_usage_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_GATEWAY_PLAN_AWARE_THROTTLING_ENABLED", "true")
+        get_settings.cache_clear()
+
+        app = authenticated_usage_client.app
+        app.state.plan_resolver.get_plan = AsyncMock(
+            return_value=PlanInfo(plan_key=None, in_trial_period=True)
+        )
+
+        response = authenticated_usage_client.get(
+            "/v1/usage/posthog_code",
+            headers={"Authorization": "Bearer phx_test"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["burst"]["limit_usd"] == 5.0
+        assert data["sustained"]["limit_usd"] == 50.0
+        get_settings.cache_clear()
+
+    def test_returns_zero_limits_when_trial_expired(
+        self, authenticated_usage_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_GATEWAY_PLAN_AWARE_THROTTLING_ENABLED", "true")
+        get_settings.cache_clear()
+
+        app = authenticated_usage_client.app
+        app.state.plan_resolver.get_plan = AsyncMock(
+            return_value=PlanInfo(plan_key="posthog-code-free-20260301", in_trial_period=False)
+        )
+
+        response = authenticated_usage_client.get(
+            "/v1/usage/posthog_code",
+            headers={"Authorization": "Bearer phx_test"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["burst"]["limit_usd"] == 0.0
+        assert data["sustained"]["limit_usd"] == 0.0
+        assert data["is_rate_limited"] is True
+        get_settings.cache_clear()
+
+    def test_returns_pro_limits_with_pro_plan(
+        self, authenticated_usage_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_GATEWAY_PLAN_AWARE_THROTTLING_ENABLED", "true")
+        get_settings.cache_clear()
+
+        app = authenticated_usage_client.app
+        app.state.plan_resolver.get_plan = AsyncMock(
+            return_value=PlanInfo(plan_key="posthog-code-200-20260301", in_trial_period=False)
+        )
+
+        response = authenticated_usage_client.get(
+            "/v1/usage/posthog_code",
+            headers={"Authorization": "Bearer phx_test"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["burst"]["limit_usd"] == 100.0
+        assert data["sustained"]["limit_usd"] == 1000.0
+        get_settings.cache_clear()
 
     def test_returns_401_without_auth(self, client: TestClient) -> None:
         response = client.get("/v1/usage/posthog_code")

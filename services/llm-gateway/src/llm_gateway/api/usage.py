@@ -5,11 +5,17 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
+import structlog
+
 from llm_gateway.auth.models import AuthenticatedUser
 from llm_gateway.dependencies import get_authenticated_user
+from llm_gateway.config import get_settings
 from llm_gateway.rate_limiting.cost_throttles import CostThrottle, UserCostBurstThrottle, UserCostSustainedThrottle
 from llm_gateway.rate_limiting.runner import ThrottleRunner
 from llm_gateway.rate_limiting.throttles import ThrottleContext
+from llm_gateway.services.plan_resolver import PlanResolver
+
+logger = structlog.get_logger(__name__)
 
 usage_router = APIRouter(prefix="/v1/usage", tags=["Usage"])
 
@@ -58,10 +64,29 @@ async def get_usage(
     user: Annotated[AuthenticatedUser, Depends(get_authenticated_user)],
 ) -> UsageResponse:
     runner: ThrottleRunner = request.app.state.throttle_runner
+
+    plan_key: str | None = None
+    in_trial_period: bool = True
+    settings = get_settings()
+    if product == "posthog_code" and settings.plan_aware_throttling_enabled:
+        plan_resolver: PlanResolver = request.app.state.plan_resolver
+        auth_header = request.headers.get("Authorization", "")
+        try:
+            plan_info = await plan_resolver.get_plan(
+                user_id=user.user_id,
+                auth_header=auth_header,
+            )
+            plan_key = plan_info.plan_key
+            in_trial_period = plan_info.in_trial_period
+        except Exception:
+            logger.warning("plan_resolve_failed_usage", user_id=user.user_id)
+
     context = ThrottleContext(
         user=user,
         product=product,
         end_user_id=str(user.user_id),
+        plan_key=plan_key,
+        in_trial_period=in_trial_period,
     )
 
     burst_status: CostLimitStatus | None = None
@@ -89,3 +114,14 @@ async def get_usage(
         sustained=sustained_status,
         is_rate_limited=burst_status.exceeded or sustained_status.exceeded,
     )
+
+
+@usage_router.post("/{product}/invalidate-plan-cache")
+async def invalidate_plan_cache(
+    product: str,
+    request: Request,
+    user: Annotated[AuthenticatedUser, Depends(get_authenticated_user)],
+) -> dict[str, bool]:
+    plan_resolver: PlanResolver = request.app.state.plan_resolver
+    await plan_resolver.invalidate(user.user_id)
+    return {"ok": True}

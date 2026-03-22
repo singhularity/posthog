@@ -6,11 +6,12 @@ from typing import TYPE_CHECKING
 import structlog
 from redis.asyncio import Redis
 
-from llm_gateway.config import DEFAULT_USER_COST_LIMIT, get_settings
+from llm_gateway.config import DEFAULT_USER_COST_LIMIT, FREE_PLAN_EXPIRED_COST_LIMIT, FREE_PLAN_TRIAL_COST_LIMIT, get_settings
 
 if TYPE_CHECKING:
     from llm_gateway.config import UserCostLimit
 from llm_gateway.rate_limiting.redis_limiter import CostRateLimiter
+from llm_gateway.services.plan_resolver import is_pro_plan
 from llm_gateway.rate_limiting.throttles import Throttle, ThrottleContext, ThrottleResult, get_team_multiplier
 
 logger = structlog.get_logger(__name__)
@@ -149,7 +150,17 @@ class _UserCostThrottleBase(CostThrottle):
         return f"{base}:tm{team_mult}"
 
     def _get_config(self, context: ThrottleContext) -> UserCostLimit:
-        config = get_settings().user_cost_limits.get(context.product)
+        settings = get_settings()
+        if (
+            context.product == "posthog_code"
+            and settings.plan_aware_throttling_enabled
+            and not is_pro_plan(context.plan_key)
+        ):
+            if context.in_trial_period:
+                return FREE_PLAN_TRIAL_COST_LIMIT
+            return FREE_PLAN_EXPIRED_COST_LIMIT
+
+        config = settings.user_cost_limits.get(context.product)
         if not config:
             if context.end_user_id and context.product not in self._warned_products:
                 self._warned_products.add(context.product)

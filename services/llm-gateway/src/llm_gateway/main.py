@@ -22,6 +22,8 @@ from llm_gateway.callbacks import init_callbacks
 from llm_gateway.config import get_settings
 from llm_gateway.db.postgres import close_db_pool, init_db_pool
 from llm_gateway.metrics.prometheus import DB_POOL_SIZE, get_instrumentator
+import httpx
+
 from llm_gateway.rate_limiting.cost_refresh import ensure_costs_fresh
 from llm_gateway.rate_limiting.cost_throttles import (
     ProductCostThrottle,
@@ -30,6 +32,7 @@ from llm_gateway.rate_limiting.cost_throttles import (
 )
 from llm_gateway.rate_limiting.runner import ThrottleRunner
 from llm_gateway.request_context import RequestContext, set_request_context
+from llm_gateway.services.plan_resolver import PlanResolver
 
 
 def configure_logging(debug: bool = False) -> None:
@@ -142,6 +145,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     logger.info("Throttle runner initialized")
 
+    app.state.http_client = httpx.AsyncClient()
+    app.state.plan_resolver = PlanResolver(
+        redis=app.state.redis,
+        http_client=app.state.http_client,
+    )
+    logger.info("Plan resolver initialized", posthog_api_url=settings.posthog_api_url or "(not configured)")
+
     logger.info(
         "rate_limits_configured",
         product_cost_limits={
@@ -167,6 +177,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
+    if app.state.http_client:
+        await app.state.http_client.aclose()
+        logger.info("HTTP client closed")
     if app.state.redis:
         await app.state.redis.aclose()
         logger.info("Redis closed")
