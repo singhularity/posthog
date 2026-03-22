@@ -837,12 +837,13 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
 
             const capturedDags = values.dags
             const isStaff = values.user?.is_staff ?? false
+            let isCreatingDag = false
 
             LemonDialog.openForm({
                 title: 'Save as view',
                 initialValues: {
                     viewName: values.activeTab?.name || '',
-                    dagId: values.selectedDagId ?? null,
+                    dagId: values.selectedDagId ?? capturedDags[0]?.id ?? null,
                     dagName: null as string | null,
                     isTest: false,
                 },
@@ -888,7 +889,10 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                                                 selectedDagId={dagId}
                                                 dagName={dagName}
                                                 onSelectDag={setDagId}
-                                                onDagName={setDagName}
+                                                onDagName={(name) => {
+                                                    isCreatingDag = name !== null
+                                                    setDagName(name)
+                                                }}
                                             />
                                         )}
                                     </LemonField>
@@ -903,9 +907,18 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                             : !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
                               ? 'Name must be valid'
                               : undefined,
-                    dagName: (dagName) => {
-                        if (!dagName) {
+                    dagId: (dagId) => {
+                        if (isCreatingDag) {
                             return undefined
+                        }
+                        if (!dagId) {
+                            return 'Please select a DAG'
+                        }
+                        return undefined
+                    },
+                    dagName: (dagName) => {
+                        if (dagName === null || dagName === undefined) {
+                            return undefined // we are not creating a DAG, we are selecting an existing one
                         }
                         if (!dagName.trim()) {
                             return 'DAG name is required'

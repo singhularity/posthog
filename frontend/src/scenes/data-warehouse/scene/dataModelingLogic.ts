@@ -559,9 +559,12 @@ export const dataModelingLogic = kea<dataModelingLogicType>([
             actions.setNodesRaw(applyNodeChanges(nodes, values.nodes))
         },
         loadDagsSuccess: ({ dags }) => {
-            // graph view requires a single DAG — auto-select the first one
-            if (values.viewMode === 'graph' && !values.selectedDagId && dags.length > 0) {
+            const isStale = values.selectedDagId && !dags.some((d) => d.id === values.selectedDagId)
+            // graph view requires a single DAG — auto-select the first one, or reset stale persisted ID
+            if (values.viewMode === 'graph' && (!values.selectedDagId || isStale) && dags.length > 0) {
                 actions.setSelectedDagId(dags[0].id)
+            } else if (isStale) {
+                actions.setSelectedDagId(null)
             }
         },
         loadDataModelingNodesSuccess: () => {
