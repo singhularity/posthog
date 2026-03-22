@@ -63,6 +63,12 @@ const warehouseSavedQueriesCreate = (): ToolBase<
         if (params.query !== undefined) {
             body['query'] = params.query
         }
+        if (params.dag_id !== undefined) {
+            body['dag_id'] = params.dag_id
+        }
+        if (params.is_test !== undefined) {
+            body['is_test'] = params.is_test
+        }
         const result = await context.api.request<Schemas.DataWarehouseSavedQuery>({
             method: 'POST',
             path: `/api/projects/${projectId}/warehouse_saved_queries/`,
@@ -117,6 +123,12 @@ const warehouseSavedQueriesPartialUpdate = (): ToolBase<
         }
         if (params.edited_history_id !== undefined) {
             body['edited_history_id'] = params.edited_history_id
+        }
+        if (params.dag_id !== undefined) {
+            body['dag_id'] = params.dag_id
+        }
+        if (params.is_test !== undefined) {
+            body['is_test'] = params.is_test
         }
         const result = await context.api.request<Schemas.DataWarehouseSavedQuery>({
             method: 'PATCH',
@@ -174,6 +186,12 @@ const warehouseSavedQueriesMaterializeCreate = (): ToolBase<
         if (params.soft_update !== undefined) {
             body['soft_update'] = params.soft_update
         }
+        if (params.dag_id !== undefined) {
+            body['dag_id'] = params.dag_id
+        }
+        if (params.is_test !== undefined) {
+            body['is_test'] = params.is_test
+        }
         const result = await context.api.request<Schemas.DataWarehouseSavedQuery>({
             method: 'POST',
             path: `/api/projects/${projectId}/warehouse_saved_queries/${params.id}/materialize/`,
@@ -218,6 +236,12 @@ const warehouseSavedQueriesRevertMaterializationCreate = (): ToolBase<
         if (params.soft_update !== undefined) {
             body['soft_update'] = params.soft_update
         }
+        if (params.dag_id !== undefined) {
+            body['dag_id'] = params.dag_id
+        }
+        if (params.is_test !== undefined) {
+            body['is_test'] = params.is_test
+        }
         const result = await context.api.request<Schemas.DataWarehouseSavedQuery>({
             method: 'POST',
             path: `/api/projects/${projectId}/warehouse_saved_queries/${params.id}/revert_materialization/`,
@@ -257,6 +281,12 @@ const warehouseSavedQueriesRunCreate = (): ToolBase<
         }
         if (params.soft_update !== undefined) {
             body['soft_update'] = params.soft_update
+        }
+        if (params.dag_id !== undefined) {
+            body['dag_id'] = params.dag_id
+        }
+        if (params.is_test !== undefined) {
+            body['is_test'] = params.is_test
         }
         const result = await context.api.request<Schemas.DataWarehouseSavedQuery>({
             method: 'POST',
