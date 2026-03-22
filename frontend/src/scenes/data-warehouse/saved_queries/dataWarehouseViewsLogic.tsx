@@ -52,7 +52,7 @@ export const dataWarehouseViewsLogic = kea<dataWarehouseViewsLogicType>([
                     return savedQueries.results
                 },
                 createDataWarehouseSavedQuery: async (
-                    view: Partial<DatabaseSchemaViewTable> & { types: string[][] }
+                    view: Partial<DatabaseSchemaViewTable> & { types: string[][]; dag_id?: string }
                 ) => {
                     const newView = await api.dataWarehouseSavedQueries.create(view)
 
