@@ -54,10 +54,12 @@ class TestRRuleUtils(TestCase):
             ("NOT_A_RRULE",),
             ("FREQ=INVALID",),
             ("",),
+            ("DTSTART:20260101T000000\nRRULE:FREQ=DAILY",),
+            ("BYDAY=MO",),
         ]
     )
     def test_validate_rrule_rejects_invalid_strings(self, rrule_str):
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError):
             validate_rrule(rrule_str)
 
     def test_compute_next_occurrences_weekly(self):

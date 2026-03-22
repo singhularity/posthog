@@ -8,7 +8,12 @@ UTC = UTC
 
 def validate_rrule(rrule_string: str) -> None:
     """Validate an RRULE string. Raises ValueError if invalid."""
-    rrulestr(rrule_string)
+    if "DTSTART" in rrule_string:
+        raise ValueError("RRULE must not contain DTSTART (starts_at is managed separately)")
+    try:
+        rrulestr(rrule_string)
+    except TypeError as e:
+        raise ValueError(str(e)) from e
 
 
 def compute_next_occurrences(
