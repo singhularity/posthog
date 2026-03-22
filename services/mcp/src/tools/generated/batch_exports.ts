@@ -45,7 +45,7 @@ const batchExportsList = (): ToolBase<
     },
 })
 
-const BatchExportGetSchema = BatchExportsRetrieveParams.omit({ project_id: true })
+const BatchExportGetSchema = BatchExportsRetrieveParams.omit({ organization_id: true })
 
 const batchExportGet = (): ToolBase<typeof BatchExportGetSchema, Schemas.BatchExport> => ({
     name: 'batch-export-get',
@@ -113,7 +113,7 @@ const batchExportCreate = (): ToolBase<typeof BatchExportCreateSchema, Schemas.B
     },
 })
 
-const BatchExportUpdateSchema = BatchExportsPartialUpdateParams.omit({ project_id: true }).extend(
+const BatchExportUpdateSchema = BatchExportsPartialUpdateParams.omit({ organization_id: true }).extend(
     BatchExportsPartialUpdateBody.shape
 )
 
@@ -168,7 +168,7 @@ const batchExportUpdate = (): ToolBase<typeof BatchExportUpdateSchema, Schemas.B
     },
 })
 
-const BatchExportDeleteSchema = BatchExportsDestroyParams.omit({ project_id: true })
+const BatchExportDeleteSchema = BatchExportsDestroyParams.omit({ organization_id: true })
 
 const batchExportDelete = (): ToolBase<typeof BatchExportDeleteSchema, unknown> => ({
     name: 'batch-export-delete',
@@ -183,7 +183,7 @@ const batchExportDelete = (): ToolBase<typeof BatchExportDeleteSchema, unknown> 
     },
 })
 
-const BatchExportPauseSchema = BatchExportsPauseCreateParams.omit({ project_id: true }).extend(
+const BatchExportPauseSchema = BatchExportsPauseCreateParams.omit({ organization_id: true }).extend(
     BatchExportsPauseCreateBody.shape
 )
 
@@ -241,7 +241,7 @@ const batchExportPause = (): ToolBase<typeof BatchExportPauseSchema, unknown> =>
     },
 })
 
-const BatchExportUnpauseSchema = BatchExportsUnpauseCreateParams.omit({ project_id: true }).extend(
+const BatchExportUnpauseSchema = BatchExportsUnpauseCreateParams.omit({ organization_id: true }).extend(
     BatchExportsUnpauseCreateBody.shape
 )
 

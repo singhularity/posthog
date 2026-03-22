@@ -1,0 +1,18 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "batch_export_id": {
+            "type": "string"
+        },
+        "cursor": {
+            "description": "The pagination cursor value.",
+            "type": "string"
+        },
+        "ordering": {
+            "description": "Which field to use when ordering the results.",
+            "type": "string"
+        }
+    },
+    "required": ["batch_export_id"],
+    "type": "object"
+}

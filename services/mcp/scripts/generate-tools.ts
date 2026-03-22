@@ -150,6 +150,23 @@ function findOperation(spec: OpenApiSpec, operationId: string): ResolvedOperatio
     return fallback
 }
 
+/**
+ * Find the operation whose operationId exactly matches, without _N suffix stripping.
+ * Orval generates Zod schemas from the exact operationId, so when the codegen needs
+ * to know which path params the Orval schema contains (for `.omit()` calls), it must
+ * look at the original operation — not the _2 variant that `findOperation` may prefer.
+ */
+function findExactOperation(spec: OpenApiSpec, operationId: string): ResolvedOperation | undefined {
+    for (const [urlPath, methods] of Object.entries(spec.paths)) {
+        for (const [method, op] of Object.entries(methods)) {
+            if (op?.operationId === operationId) {
+                return { method: method.toUpperCase(), path: urlPath, operation: op }
+            }
+        }
+    }
+    return undefined
+}
+
 function resolveSchema(spec: OpenApiSpec, schemaOrRef: OpenApiSchema | { $ref: string }): OpenApiSchema | undefined {
     if ('$ref' in schemaOrRef && schemaOrRef.$ref) {
         const schemaName = schemaOrRef.$ref.replace('#/components/schemas/', '')
@@ -260,7 +277,15 @@ function composeToolSchema(config: ToolConfig, resolved: ResolvedOperation, spec
     if (pathParams.length > 0) {
         const importName = `${pascal}Params`
         orvalImports.push(importName)
-        const omitKeys = autoResolvedParams.filter((k) => allPathParams.some((p) => p.name === k))
+        // The Orval schema is generated from the exact operationId (not _2 variants),
+        // so we must determine which auto-resolved params to .omit() based on the
+        // original operation's path params — not the resolved path (which may differ
+        // when findOperation prefers a /api/projects/ variant).
+        const exactOp = findExactOperation(spec, config.operation)
+        const orvalPathParams = exactOp
+            ? (exactOp.operation.parameters ?? []).filter((p) => p.in === 'path')
+            : allPathParams
+        const omitKeys = autoResolvedParams.filter((k) => orvalPathParams.some((p) => p.name === k))
         if (omitKeys.length > 0) {
             const omitObj = omitKeys.map((k) => `${k}: true`).join(', ')
             schemaParts.push(`${importName}.omit({ ${omitObj} })`)
