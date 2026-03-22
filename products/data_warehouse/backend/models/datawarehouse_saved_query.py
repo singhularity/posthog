@@ -118,12 +118,16 @@ class DataWarehouseSavedQuery(CreatedMetaFields, UUIDTModel, UpdatedMetaFields, 
         null=True, blank=True, help_text="When this test view should be automatically deleted."
     )
 
+
     def save(self, *args, **kwargs):
         if self.is_test and not self.expires_at:
             from django.utils import timezone
 
             self.expires_at = timezone.now() + TEST_VIEW_EXPIRY_INTERVAL
+        elif not self.is_test and self.expires_at:
+            self.expires_at = None
         super().save(*args, **kwargs)
+
 
     class Meta:
         constraints = [
