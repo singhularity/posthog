@@ -1,7 +1,9 @@
-from datetime import datetime
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
-import pytz
 from dateutil.rrule import rrulestr
+
+UTC = UTC
 
 
 def validate_rrule(rrule_string: str) -> None:
@@ -19,40 +21,28 @@ def compute_next_occurrences(
     """
     Compute the next `count` occurrences from an RRULE string.
 
-    Expands the RRULE in the given timezone so that "9 AM Europe/Prague"
-    stays at 9 AM local time across DST changes, then converts results to UTC.
-
-    Uses naive datetimes for RRULE expansion (dateutil doesn't handle DST
-    with timezone-aware dtstart), then localizes each result to get the
-    correct UTC offset for that date.
+    Expands the RRULE in naive local time so that "9 AM Europe/Prague"
+    stays at 9 AM local time across DST changes, then converts to UTC.
     """
-    tz = pytz.timezone(timezone_str)
+    tz = ZoneInfo(timezone_str)
 
     # Convert starts_at to naive local time for RRULE expansion
-    if starts_at.tzinfo is not None:
-        starts_at_naive = starts_at.astimezone(tz).replace(tzinfo=None)
-    else:
-        starts_at_naive = starts_at
+    starts_local = starts_at.astimezone(tz).replace(tzinfo=None)
 
-    rule = rrulestr(rrule_string, dtstart=starts_at_naive, ignoretz=True)
+    rule = rrulestr(rrule_string, dtstart=starts_local, ignoretz=True)
 
-    if after is None:
-        after_naive = datetime.now(tz).replace(tzinfo=None)
-    elif after.tzinfo is not None:
-        after_naive = after.astimezone(tz).replace(tzinfo=None)
-    else:
-        after_naive = pytz.utc.localize(after).astimezone(tz).replace(tzinfo=None)
+    # Convert after to naive local time (default: now in target tz)
+    after_local = (after or datetime.now(UTC)).astimezone(tz).replace(tzinfo=None)
 
     occurrences: list[datetime] = []
-    current = after_naive
+    current = after_local
     for _ in range(count * 10):  # Safety limit
         next_dt = rule.after(current, inc=False)
         if next_dt is None:
             break
-        # Localize the naive result in the target timezone (applies correct DST offset)
-        # then convert to UTC for storage
-        localized = tz.localize(next_dt)
-        occurrences.append(localized.astimezone(pytz.utc))
+        # Attach the target timezone (zoneinfo picks the correct DST offset
+        # for this date), then convert to UTC for storage
+        occurrences.append(next_dt.replace(tzinfo=tz).astimezone(UTC))
         if len(occurrences) >= count:
             break
         current = next_dt
