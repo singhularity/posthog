@@ -50,7 +50,9 @@ class CIHealthSerializer(DataclassSerializer):
 
 
 class CreateRepoInputSerializer(serializers.Serializer):
-    repo_external_id = serializers.IntegerField(help_text="GitHub numeric repository ID (stable across renames)")
+    repo_external_id = serializers.IntegerField(
+        default=0, help_text="GitHub numeric repository ID (stable across renames). Defaults to 0 if unknown."
+    )
     repo_full_name = serializers.CharField(help_text="Full repository name (e.g., 'PostHog/posthog')")
     default_branch = serializers.CharField(default="main", help_text="Default branch name")
 

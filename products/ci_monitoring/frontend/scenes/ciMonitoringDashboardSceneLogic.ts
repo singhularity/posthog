@@ -5,7 +5,12 @@ import { teamLogic } from 'scenes/teamLogic'
 
 import { Breadcrumb } from '~/types'
 
-import { ciMonitoringReposList, ciMonitoringReposHealthRetrieve, ciMonitoringTestsList } from '../generated/api'
+import {
+    ciMonitoringReposCreate,
+    ciMonitoringReposList,
+    ciMonitoringReposHealthRetrieve,
+    ciMonitoringTestsList,
+} from '../generated/api'
 import type { CIHealthApi, RepoApi, TestCaseApi } from '../generated/api.schemas'
 import type { ciMonitoringDashboardSceneLogicType } from './ciMonitoringDashboardSceneLogicType'
 
@@ -39,6 +44,11 @@ export const ciMonitoringDashboardSceneLogic = kea<ciMonitoringDashboardSceneLog
                     const response = await ciMonitoringReposList(String(values.currentProjectId))
                     return response.results[0] || null
                 },
+                connectRepo: async (repoFullName: string) => {
+                    return await ciMonitoringReposCreate(String(values.currentProjectId), {
+                        repo_full_name: repoFullName,
+                    })
+                },
             },
         ],
         health: [
@@ -71,6 +81,7 @@ export const ciMonitoringDashboardSceneLogic = kea<ciMonitoringDashboardSceneLog
 
     selectors({
         streak: [(s) => [s.health], (health): CIHealthApi['streak'] | null => health?.streak || null],
+        hasRepo: [(s) => [s.repo], (repo): boolean => repo !== null],
         breadcrumbs: [
             () => [],
             (): Breadcrumb[] => [
@@ -87,13 +98,21 @@ export const ciMonitoringDashboardSceneLogic = kea<ciMonitoringDashboardSceneLog
         setActiveTab: () => {
             actions.loadTests()
         },
-        loadRepoSuccess: () => {
-            actions.loadHealth()
+        loadRepoSuccess: ({ repo }) => {
+            if (repo) {
+                actions.loadHealth()
+                actions.loadTests()
+            }
+        },
+        connectRepoSuccess: ({ repo }) => {
+            if (repo) {
+                actions.loadHealth()
+                actions.loadTests()
+            }
         },
     })),
 
     afterMount(({ actions }) => {
         actions.loadRepo()
-        actions.loadTests()
     }),
 ])
