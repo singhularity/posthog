@@ -67,6 +67,7 @@ async def get_usage(
 
     plan_key: str | None = None
     in_trial_period: bool = True
+    seat_created_at: str | None = None
     settings = get_settings()
     if product == "posthog_code" and settings.plan_aware_throttling_enabled:
         plan_resolver: PlanResolver = request.app.state.plan_resolver
@@ -78,6 +79,7 @@ async def get_usage(
             )
             plan_key = plan_info.plan_key
             in_trial_period = plan_info.in_trial_period
+            seat_created_at = plan_info.seat_created_at
         except Exception:
             logger.warning("plan_resolve_failed_usage", user_id=user.user_id)
 
@@ -87,6 +89,7 @@ async def get_usage(
         end_user_id=str(user.user_id),
         plan_key=plan_key,
         in_trial_period=in_trial_period,
+        seat_created_at=seat_created_at,
     )
 
     burst_status: CostLimitStatus | None = None

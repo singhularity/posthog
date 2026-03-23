@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llm_gateway.services.plan_resolver import PlanInfo, PlanResolver, _is_in_trial, is_pro_plan
+from llm_gateway.services.plan_resolver import PlanInfo, PlanResolver, _is_in_trial, get_billing_period_number, is_pro_plan
 
 
 class TestIsProPlan:
@@ -45,6 +45,38 @@ class TestIsInTrial:
 
     def test_invalid_date_string_is_trial(self) -> None:
         assert _is_in_trial("not-a-date") is True
+
+
+class TestGetBillingPeriodNumber:
+    def test_none_returns_zero(self) -> None:
+        assert get_billing_period_number(None) == 0
+
+    def test_invalid_date_returns_zero(self) -> None:
+        assert get_billing_period_number("not-a-date") == 0
+
+    def test_today_returns_zero(self) -> None:
+        now = datetime.now(tz=UTC).isoformat()
+        assert get_billing_period_number(now) == 0
+
+    def test_five_days_ago_returns_zero(self) -> None:
+        created = (datetime.now(tz=UTC) - timedelta(days=5)).isoformat()
+        assert get_billing_period_number(created) == 0
+
+    def test_thirty_days_returns_one(self) -> None:
+        created = (datetime.now(tz=UTC) - timedelta(days=30)).isoformat()
+        assert get_billing_period_number(created) == 1
+
+    def test_sixty_days_returns_two(self) -> None:
+        created = (datetime.now(tz=UTC) - timedelta(days=60)).isoformat()
+        assert get_billing_period_number(created) == 2
+
+    def test_custom_period_days(self) -> None:
+        created = (datetime.now(tz=UTC) - timedelta(days=15)).isoformat()
+        assert get_billing_period_number(created, period_days=7) == 2
+
+    def test_just_under_boundary(self) -> None:
+        created = (datetime.now(tz=UTC) - timedelta(days=29, hours=23)).isoformat()
+        assert get_billing_period_number(created) == 0
 
 
 class TestPlanResolver:

@@ -57,7 +57,7 @@ class TestUsageEndpoint:
 
         app = authenticated_usage_client.app
         app.state.plan_resolver.get_plan = AsyncMock(
-            return_value=PlanInfo(plan_key=None, in_trial_period=True)
+            return_value=PlanInfo(plan_key=None, in_trial_period=True, seat_created_at=None)
         )
 
         response = authenticated_usage_client.get(
@@ -79,7 +79,7 @@ class TestUsageEndpoint:
 
         app = authenticated_usage_client.app
         app.state.plan_resolver.get_plan = AsyncMock(
-            return_value=PlanInfo(plan_key="posthog-code-free-20260301", in_trial_period=False)
+            return_value=PlanInfo(plan_key="posthog-code-free-20260301", in_trial_period=False, seat_created_at=None)
         )
 
         response = authenticated_usage_client.get(
@@ -102,7 +102,7 @@ class TestUsageEndpoint:
 
         app = authenticated_usage_client.app
         app.state.plan_resolver.get_plan = AsyncMock(
-            return_value=PlanInfo(plan_key="posthog-code-200-20260301", in_trial_period=False)
+            return_value=PlanInfo(plan_key="posthog-code-200-20260301", in_trial_period=False, seat_created_at=None)
         )
 
         response = authenticated_usage_client.get(

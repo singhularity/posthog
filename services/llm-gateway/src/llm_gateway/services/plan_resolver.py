@@ -32,6 +32,7 @@ PRO_PLAN_PREFIX = "posthog-code-200"
 class PlanInfo:
     plan_key: str | None
     in_trial_period: bool
+    seat_created_at: str | None
 
 
 def _redis_key(user_id: int) -> str:
@@ -42,6 +43,17 @@ def is_pro_plan(plan_key: str | None) -> bool:
     if not plan_key:
         return False
     return plan_key.startswith(PRO_PLAN_PREFIX)
+
+
+def get_billing_period_number(seat_created_at: str | None, period_days: int = 30) -> int:
+    if not seat_created_at:
+        return 0
+    try:
+        created = datetime.fromisoformat(seat_created_at)
+        elapsed = datetime.now(tz=UTC) - created
+        return max(0, elapsed.days // period_days)
+    except (ValueError, TypeError):
+        return 0
 
 
 def _is_in_trial(seat_created_at: str | None) -> bool:
@@ -83,6 +95,7 @@ class PlanResolver:
         return PlanInfo(
             plan_key=plan_key,
             in_trial_period=_is_in_trial(seat_created_at),
+            seat_created_at=seat_created_at,
         )
 
     async def _get_cached(self, user_id: int) -> PlanInfo | None:
@@ -97,6 +110,7 @@ class PlanResolver:
                 return PlanInfo(
                     plan_key=plan_key,
                     in_trial_period=_is_in_trial(seat_created_at),
+                    seat_created_at=seat_created_at,
                 )
         except Exception:
             logger.debug("plan_cache_read_failed", user_id=user_id)
