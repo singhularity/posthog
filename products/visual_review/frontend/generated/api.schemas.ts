@@ -26,8 +26,8 @@ export interface PaginatedRepoListApi {
 }
 
 export interface CreateRepoInputApi {
-    /** GitHub numeric repository ID (stable across renames) */
-    repo_external_id: number
+    /** GitHub numeric repository ID (stable across renames). Defaults to 0 if unknown. */
+    repo_external_id?: number
     /** Full repository name (e.g., 'PostHog/posthog') */
     repo_full_name: string
     /** Default branch name */
