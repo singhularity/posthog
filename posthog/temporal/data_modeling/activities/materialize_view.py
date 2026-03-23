@@ -137,15 +137,8 @@ def _transform_date_and_datetimes(batch: pa.RecordBatch, types: list[tuple[str, 
 
         # Handle array/list types (e.g., Array(DateTime))
         if pa.types.is_list(field.type):
-            if "datetime64" in type.lower():
+            if "datetime" in type.lower():
                 list_element_type: pa.DataType = pa.timestamp("us", tz="UTC")
-                list_type = pa.list_(list_element_type)
-                list_field = field.with_type(list_type)
-                list_int64 = pc.cast(column, pa.list_(pa.int64()))
-                list_timestamp_s = pc.cast(list_int64, pa.list_(pa.timestamp("s")))
-                list_column = pc.cast(list_timestamp_s, list_type)
-            elif "datetime" in type.lower():
-                list_element_type = pa.timestamp("us", tz="UTC")
                 list_type = pa.list_(list_element_type)
                 list_field = field.with_type(list_type)
                 list_int64 = pc.cast(column, pa.list_(pa.int64()))
