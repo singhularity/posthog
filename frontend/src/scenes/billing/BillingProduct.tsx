@@ -217,8 +217,8 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
                             <CodeSeatsSection />
                         </div>
                     ) : (
-                    <>
-                    {/* Exceeded limit notice */}
+                        <>
+                            {/* Exceeded limit notice */}
                     {product.percentage_usage > 1 && (
                         <LemonBanner className="mt-6" type="error">
                             You have exceeded the {hasCustomLimitSet ? 'billing limit' : 'free tier limit'} for this
@@ -583,7 +583,7 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
                             </div>
                         </div>
                     )}
-                    </>
+                        </>
                     )}
                 </div>
 

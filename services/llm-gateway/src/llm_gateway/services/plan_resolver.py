@@ -20,6 +20,7 @@ from llm_gateway.config import get_settings
 
 if TYPE_CHECKING:
     import httpx
+    from fastapi import Request
     from redis.asyncio import Redis
 
 logger = structlog.get_logger(__name__)
@@ -65,6 +66,28 @@ def _is_in_trial(seat_created_at: str | None) -> bool:
         return datetime.now(tz=UTC) - created < timedelta(days=trial_days)
     except (ValueError, TypeError):
         return True
+
+
+async def resolve_plan_info(
+    request: Request,
+    user_id: int,
+    product: str,
+) -> PlanInfo:
+    """Resolve plan info, returning safe defaults if disabled or on failure."""
+    settings = get_settings()
+    if product != "posthog_code" or not settings.plan_aware_throttling_enabled:
+        return PlanInfo(plan_key=None, in_trial_period=True, seat_created_at=None)
+
+    plan_resolver: PlanResolver = request.app.state.plan_resolver
+    auth_header = request.headers.get("Authorization", "")
+    try:
+        return await plan_resolver.get_plan(
+            user_id=user_id,
+            auth_header=auth_header,
+        )
+    except Exception:
+        logger.warning("plan_resolve_failed", user_id=user_id)
+        return PlanInfo(plan_key=None, in_trial_period=True, seat_created_at=None)
 
 
 class PlanResolver:

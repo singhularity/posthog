@@ -5,17 +5,27 @@ import { lemonToast } from '@posthog/lemon-ui'
 
 import api from 'lib/api'
 import { OrganizationMembershipLevel } from 'lib/constants'
+import { membersLogic } from 'scenes/organization/membersLogic'
 import { organizationLogic } from 'scenes/organizationLogic'
 import { userLogic } from 'scenes/userLogic'
 
-import { CODE_PLAN_FREE, CODE_PLAN_PRO, CODE_PRODUCT_KEY } from './constants'
+import { CODE_FREE_PLAN_PREFIX, CODE_PRO_PLAN_PREFIX, CODE_PRODUCT_KEY } from './constants'
 import type { seatBillingLogicType } from './seatBillingLogicType'
 import type { SeatData } from './types'
+
+export function isProPlanKey(planKey: string | null | undefined): boolean {
+    return !!planKey && planKey.startsWith(CODE_PRO_PLAN_PREFIX)
+}
+
+export function isFreePlanKey(planKey: string | null | undefined): boolean {
+    return !!planKey && planKey.startsWith(CODE_FREE_PLAN_PREFIX)
+}
 
 export const seatBillingLogic = kea<seatBillingLogicType>([
     path(['scenes', 'billing', 'seatBillingLogic']),
     connect(() => ({
-        values: [organizationLogic, ['currentOrganization'], userLogic, ['user']],
+        values: [organizationLogic, ['currentOrganization'], userLogic, ['user'], membersLogic, ['members']],
+        actions: [membersLogic, ['ensureAllMembersLoaded']],
     })),
     actions({
         upgradeSeat: (planKey: string) => ({ planKey }),
@@ -62,11 +72,11 @@ export const seatBillingLogic = kea<seatBillingLogicType>([
                     currentOrganization.membership_level >= OrganizationMembershipLevel.Admin
                 ),
         ],
-        isPro: [(s) => [s.mySeat], (mySeat): boolean => mySeat?.plan_key === CODE_PLAN_PRO],
-        isFree: [(s) => [s.mySeat], (mySeat): boolean => mySeat?.plan_key === CODE_PLAN_FREE],
+        isPro: [(s) => [s.mySeat], (mySeat): boolean => isProPlanKey(mySeat?.plan_key)],
+        isFree: [(s) => [s.mySeat], (mySeat): boolean => isFreePlanKey(mySeat?.plan_key)],
         canUpgrade: [
             (s) => [s.mySeat],
-            (mySeat): boolean => !!mySeat && mySeat.status === 'active' && mySeat.plan_key === CODE_PLAN_FREE,
+            (mySeat): boolean => !!mySeat && mySeat.status === 'active' && isFreePlanKey(mySeat.plan_key),
         ],
         canCancel: [(s) => [s.mySeat], (mySeat): boolean => !!mySeat && mySeat.status === 'active'],
         canReactivate: [(s) => [s.mySeat], (mySeat): boolean => !!mySeat && mySeat.status === 'canceling'],
@@ -127,6 +137,7 @@ export const seatBillingLogic = kea<seatBillingLogicType>([
     })),
     afterMount(({ actions, values }) => {
         actions.loadMySeat()
+        actions.ensureAllMembersLoaded()
         if (values.isAdmin) {
             actions.loadOrgSeats()
         }

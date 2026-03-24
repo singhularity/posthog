@@ -1,3 +1,5 @@
+from typing import Any
+
 import requests
 import structlog
 from rest_framework import status, viewsets
@@ -5,6 +7,7 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 
 from posthog.auth import OAuthAccessTokenAuthentication, PersonalAPIKeyAuthentication
@@ -19,7 +22,7 @@ logger = structlog.get_logger(__name__)
 REQUEST_TIMEOUT_SECONDS = 30
 
 
-def _is_org_admin(user) -> bool:
+def _is_org_admin(user: Any) -> bool:
     org = user.organization
     if not org:
         return False
@@ -49,7 +52,7 @@ class SeatViewSet(viewsets.ViewSet):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _get_billing_headers(self, request):
+    def _get_billing_headers(self, request: Request) -> dict[str, str] | None:
         license = get_cached_instance_license()
         org = request.user.organization
         if not org or not license:
@@ -62,12 +65,14 @@ class SeatViewSet(viewsets.ViewSet):
         return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     @staticmethod
-    def _resolve_distinct_id(pk, request):
+    def _resolve_distinct_id(pk: str, request: Request) -> str:
         if pk == "me":
             return str(request.user.distinct_id)
         return pk
 
-    def _forward_response(self, billing_response, extract_seat=True):
+    def _forward_response(
+        self, billing_response: requests.Response | None, extract_seat: bool = True
+    ) -> Response:
         """Convert a billing service response to a DRF Response.
 
         For successful responses that contain a ``seat`` key the seat
@@ -90,7 +95,14 @@ class SeatViewSet(viewsets.ViewSet):
 
         return Response(data, status=billing_response.status_code)
 
-    def _billing_request(self, method, path, headers, json_body=None, query_params=None):
+    def _billing_request(
+        self,
+        method: str,
+        path: str,
+        headers: dict[str, str],
+        json_body: Any = None,
+        query_params: dict[str, str] | None = None,
+    ) -> requests.Response | None:
         url = f"{BILLING_SERVICE_URL}{path}"
         try:
             return requests.request(
@@ -105,7 +117,7 @@ class SeatViewSet(viewsets.ViewSet):
             logger.exception("Billing service request failed", path=path, method=method)
             return None
 
-    def _require_admin(self, request) -> None:
+    def _require_admin(self, request: Request) -> None:
         if not _is_org_admin(request.user):
             raise PermissionDenied("Only organization admins can perform this action.")
 
@@ -113,7 +125,7 @@ class SeatViewSet(viewsets.ViewSet):
     # Endpoints
     # ------------------------------------------------------------------
 
-    def list(self, request):
+    def list(self, request: Request) -> Response:
         """GET /api/seats/?product_key= -> GET /api/v2/seats/"""
         self._require_admin(request)
 
@@ -129,8 +141,12 @@ class SeatViewSet(viewsets.ViewSet):
         )
         return self._forward_response(resp, extract_seat=False)
 
-    def create(self, request):
+    def create(self, request: Request) -> Response:
         """POST /api/seats/ -> POST /api/v2/seats/"""
+        body_distinct_id = request.data.get("user_distinct_id")
+        if body_distinct_id and str(body_distinct_id) != str(request.user.distinct_id):
+            self._require_admin(request)
+
         headers = self._get_billing_headers(request)
         if not headers:
             return Response({"detail": "No organization or license found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -138,7 +154,7 @@ class SeatViewSet(viewsets.ViewSet):
         resp = self._billing_request("POST", "/api/v2/seats/", headers, json_body=request.data)
         return self._forward_response(resp)
 
-    def retrieve(self, request, pk=None):
+    def retrieve(self, request: Request, pk: str | None = None) -> Response:
         """GET /api/seats/me/ -> GET /api/v2/seats/{distinct_id}/?product_key="""
         if pk != "me":
             self._require_admin(request)
@@ -156,7 +172,7 @@ class SeatViewSet(viewsets.ViewSet):
         )
         return self._forward_response(resp)
 
-    def partial_update(self, request, pk=None):
+    def partial_update(self, request: Request, pk: str | None = None) -> Response:
         """PATCH /api/seats/me/ -> PATCH /api/v2/seats/{distinct_id}/"""
         if pk != "me":
             self._require_admin(request)
@@ -174,7 +190,7 @@ class SeatViewSet(viewsets.ViewSet):
         )
         return self._forward_response(resp)
 
-    def destroy(self, request, pk=None):
+    def destroy(self, request: Request, pk: str | None = None) -> Response:
         """DELETE /api/seats/me/?product_key= -> DELETE /api/v2/seats/{distinct_id}/?product_key="""
         if pk != "me":
             self._require_admin(request)
@@ -193,7 +209,7 @@ class SeatViewSet(viewsets.ViewSet):
         return self._forward_response(resp, extract_seat=False)
 
     @action(detail=True, methods=["post"], url_path="reactivate")
-    def reactivate(self, request, pk=None):
+    def reactivate(self, request: Request, pk: str | None = None) -> Response:
         """POST /api/seats/me/reactivate/ -> POST /api/v2/seats/{distinct_id}/reactivate/"""
         if pk != "me":
             self._require_admin(request)
