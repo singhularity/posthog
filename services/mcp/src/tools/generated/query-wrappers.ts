@@ -787,8 +787,18 @@ const AssistantRetentionQuery = z.object({
 })
 
 const DateRange = z.object({
-    date_from: z.string().nullable().optional(),
-    date_to: z.string().nullable().optional(),
+    date_from: z
+        .string()
+        .nullable()
+        .describe(
+            'Start of the date range. Accepts ISO 8601 timestamps (e.g., 2024-01-15T00:00:00Z) or relative formats: -7d (7 days ago), -2w (2 weeks ago), -1m (1 month ago),\n-1h (1 hour ago), -1mStart (start of last month), -1yStart (start of last year).'
+        )
+        .optional(),
+    date_to: z
+        .string()
+        .nullable()
+        .describe('End of the date range. Same format as date_from. Omit or null for "now".')
+        .optional(),
     explicitDate: z.coerce
         .boolean()
         .nullable()
