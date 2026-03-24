@@ -3007,6 +3007,8 @@ export type InsightEditorFilterGroup = {
     show?: boolean
     /** Summary shown next to the title when the section is collapsed (e.g. "3 filters", "$browser, $os") */
     collapsedSummary?: string | null
+    /** Extra content rendered in the tile header (right side), e.g. a toggle button */
+    headerExtra?: (props: EditorFilterProps) => JSX.Element | null
 }
 
 export interface SystemStatusSubrows {
