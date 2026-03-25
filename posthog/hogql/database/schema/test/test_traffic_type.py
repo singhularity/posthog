@@ -3,13 +3,12 @@ import pytest
 from posthog.hogql import ast
 from posthog.hogql.database.models import ExpressionField
 from posthog.hogql.database.schema.traffic_type import (
-    _user_agent_expr,
     create_bot_name_field,
     create_is_bot_field,
     create_traffic_category_field,
     create_traffic_type_field,
+    user_agent_expr,
 )
-from posthog.hogql.functions.traffic_type import BOT_DEFINITIONS
 
 FACTORY_FUNCTIONS = [
     create_is_bot_field,
@@ -22,7 +21,7 @@ FIELD_NAMES = ["$virt_is_bot", "$virt_traffic_type", "$virt_traffic_category", "
 
 class TestUserAgentExpr:
     def test_default_properties_path(self):
-        expr = _user_agent_expr()
+        expr = user_agent_expr()
         assert isinstance(expr, ast.Call)
         assert expr.name == "coalesce"
         assert len(expr.args) == 2
@@ -30,7 +29,7 @@ class TestUserAgentExpr:
         assert expr.args[1] == ast.Field(chain=["properties", "$user_agent"])
 
     def test_custom_properties_path(self):
-        expr = _user_agent_expr(properties_path=["poe", "properties"])
+        expr = user_agent_expr(properties_path=["poe", "properties"])
         assert isinstance(expr, ast.Call)
         assert expr.name == "coalesce"
         assert expr.args[0] == ast.Field(chain=["poe", "properties", "$raw_user_agent"])
@@ -65,31 +64,27 @@ class TestExpressionFieldFactories:
 
 
 class TestIsBotField:
-    def test_returns_or_expression(self):
+    def test_returns_compare_operation(self):
         field = create_is_bot_field(name="$virt_is_bot")
-        assert isinstance(field.expr, ast.Or)
+        assert isinstance(field.expr, ast.CompareOperation)
+        assert field.expr.op == ast.CompareOperationOp.NotEq
 
-    def test_has_correct_number_of_match_conditions(self):
+    def test_uses_multiMatchAnyIndex(self):
         field = create_is_bot_field(name="$virt_is_bot")
-        assert isinstance(field.expr, ast.Or)
-        # One match per BOT_DEFINITION + one for empty UA
-        assert len(field.expr.exprs) == len(BOT_DEFINITIONS) + 1
+        assert isinstance(field.expr.left, ast.Call)
+        assert field.expr.left.name == "multiMatchAnyIndex"
 
-    def test_all_conditions_use_match(self):
+    def test_compares_against_zero(self):
         field = create_is_bot_field(name="$virt_is_bot")
-        assert isinstance(field.expr, ast.Or)
-        for expr in field.expr.exprs:
-            assert isinstance(expr, ast.Call)
-            assert expr.name == "match"
+        assert isinstance(field.expr.right, ast.Constant)
+        assert field.expr.right.value == 0
 
     def test_wraps_user_agent_in_ifnull(self):
         field = create_is_bot_field(name="$virt_is_bot")
-        assert isinstance(field.expr, ast.Or)
-        first_match = field.expr.exprs[0]
-        safe_ua = first_match.args[0]
+        index_call = field.expr.left
+        safe_ua = index_call.args[0]
         assert isinstance(safe_ua, ast.Call)
         assert safe_ua.name == "ifNull"
-        # ifNull wraps a coalesce($raw_user_agent, $user_agent)
         coalesce_call = safe_ua.args[0]
         assert isinstance(coalesce_call, ast.Call)
         assert coalesce_call.name == "coalesce"

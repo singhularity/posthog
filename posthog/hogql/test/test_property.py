@@ -1127,6 +1127,15 @@ class TestProperty(BaseTest):
             {"type": "event", "key": "$virt_traffic_type", "operator": "is_set"}, scope="event"
         ) == self._parse_expr("$virt_traffic_type is not null")
 
+    def test_virtual_event_properties_boolean_filter(self):
+        assert self._property_to_expr(
+            {"type": "event", "key": "$virt_is_bot", "value": "true"}, scope="event"
+        ) == self._parse_expr("$virt_is_bot = 'true'")
+
+        assert self._property_to_expr(
+            {"type": "event", "key": "$virt_is_bot", "value": "false"}, scope="event"
+        ) == self._parse_expr("$virt_is_bot = 'false'")
+
     def test_map_virtual_properties_for_event_properties(self):
         assert map_virtual_properties(ast.Field(chain=["properties", "$virt_is_bot"])) == ast.Field(
             chain=["$virt_is_bot"]
