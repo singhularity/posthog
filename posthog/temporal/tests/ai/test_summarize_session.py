@@ -290,7 +290,7 @@ class TestSummarizeSingleSessionStreamWorkflow:
             async with Worker(
                 activity_environment.client,
                 task_queue=settings.VIDEO_EXPORT_TASK_QUEUE,
-                workflows=AI_WORKFLOWS + SIGNALS_WORKFLOWS,
+                workflows=[*AI_WORKFLOWS, *SIGNALS_WORKFLOWS],
                 activities=[stream_llm_single_session_summary_activity, fetch_session_data_activity],
                 workflow_runner=UnsandboxedWorkflowRunner(),
             ) as worker:
