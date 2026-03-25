@@ -1101,6 +1101,46 @@ class TestProperty(BaseTest):
         )
         assert map_virtual_properties(ast.Field(chain=["properties", 42])) == ast.Field(chain=["properties", 42])
 
+    def test_virtual_event_properties_on_event_scope(self):
+        assert self._property_to_expr(
+            {"type": "event", "key": "$virt_traffic_type", "value": "Bot"}, scope="event"
+        ) == self._parse_expr("$virt_traffic_type = 'Bot'")
+
+        assert self._property_to_expr(
+            {"type": "event", "key": "$virt_traffic_type", "value": "AI Agent"}, scope="event"
+        ) == self._parse_expr("$virt_traffic_type = 'AI Agent'")
+
+        assert self._property_to_expr(
+            {"type": "event", "key": "$virt_bot_name", "value": "Googlebot"}, scope="event"
+        ) == self._parse_expr("$virt_bot_name = 'Googlebot'")
+
+    def test_virtual_event_properties_with_operators(self):
+        assert self._property_to_expr(
+            {"type": "event", "key": "$virt_traffic_type", "value": "Bot", "operator": "is_not"}, scope="event"
+        ) == self._parse_expr("$virt_traffic_type != 'Bot'")
+
+        assert self._property_to_expr(
+            {"type": "event", "key": "$virt_bot_name", "value": "Google", "operator": "icontains"}, scope="event"
+        ) == self._parse_expr("$virt_bot_name ilike '%Google%'")
+
+        assert self._property_to_expr(
+            {"type": "event", "key": "$virt_traffic_type", "operator": "is_set"}, scope="event"
+        ) == self._parse_expr("$virt_traffic_type is not null")
+
+    def test_map_virtual_properties_for_event_properties(self):
+        assert map_virtual_properties(ast.Field(chain=["properties", "$virt_is_bot"])) == ast.Field(
+            chain=["$virt_is_bot"]
+        )
+        assert map_virtual_properties(ast.Field(chain=["properties", "$virt_traffic_type"])) == ast.Field(
+            chain=["$virt_traffic_type"]
+        )
+        assert map_virtual_properties(ast.Field(chain=["properties", "$virt_bot_name"])) == ast.Field(
+            chain=["$virt_bot_name"]
+        )
+        assert map_virtual_properties(ast.Field(chain=["properties", "$virt_traffic_category"])) == ast.Field(
+            chain=["$virt_traffic_category"]
+        )
+
     def test_property_to_expr_event_metadata_group_scope_basic(self):
         assert self._property_to_expr(
             {"type": "event_metadata", "key": "$group_0", "operator": "exact", "value": "1234-abcd"},

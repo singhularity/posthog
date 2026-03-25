@@ -802,9 +802,14 @@ class TestPropertyDefinitionAPI(APIBaseTest):
 
         response = self.client.get(f"/api/projects/{self.team.pk}/property_definitions/?type=event")
         assert response.status_code == status.HTTP_200_OK
-        # Should not include virtual properties when type=event
+        # Should include virtual event properties (bot detection)
         virtual_props = [prop for prop in response.json()["results"] if prop["name"].startswith("$virt_")]
-        assert len(virtual_props) == 0
+        assert len(virtual_props) > 0
+        virtual_names = {p["name"] for p in virtual_props}
+        assert "$virt_is_bot" in virtual_names
+        assert "$virt_traffic_type" in virtual_names
+        assert "$virt_traffic_category" in virtual_names
+        assert "$virt_bot_name" in virtual_names
 
 
 class TestPropertyDefinitionQuerySerializer(BaseTest):
