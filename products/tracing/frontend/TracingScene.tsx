@@ -1,6 +1,6 @@
 import { useActions, useValues } from 'kea'
 
-import { LemonModal, LemonTable, LemonTableColumns, LemonTag, SpinnerOverlay } from '@posthog/lemon-ui'
+import { LemonModal, LemonTable, LemonTableColumns, LemonTag } from '@posthog/lemon-ui'
 
 import { SceneExport } from 'scenes/sceneTypes'
 
