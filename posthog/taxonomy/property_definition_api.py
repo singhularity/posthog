@@ -553,6 +553,19 @@ class PropertyDefinitionViewSet(
         if val.get("virtual", False)
     ]
 
+    _BUILTIN_VIRTUAL_EVENT_PROPERTIES = [
+        {
+            "id": "$builtin_" + key,
+            "name": key,
+            "is_numerical": val["type"] == "Numeric",
+            "property_type": val["type"],
+            "tags": val.get("tags", []),
+            "virtual": True,
+        }
+        for (key, val) in CORE_FILTER_DEFINITIONS_BY_GROUP["event_properties"].items()
+        if val.get("virtual", False)
+    ]
+
     _BUILTIN_VIRTUAL_GROUP_PROPERTIES = [
         {
             "id": "$builtin_" + key,
@@ -726,19 +739,20 @@ class PropertyDefinitionViewSet(
 
         event_type = request.query_params.get("type", "event")
 
-        # Inject virtual person/group properties to the end of the results
-        if event_type in ["person", "group"]:
+        # Inject virtual event/person/group properties to the end of the results
+        if event_type in ["event", "person", "group"]:
             paginator = self.paginator
             assert isinstance(paginator, NotCountingLimitOffsetPaginator)
 
             query = PropertyDefinitionQuerySerializer(data=request.query_params)
             query.is_valid(raise_exception=True)
 
-            virtual_properties = (
-                self._BUILTIN_VIRTUAL_PERSON_PROPERTIES
-                if event_type == "person"
-                else self._BUILTIN_VIRTUAL_GROUP_PROPERTIES
-            )
+            if event_type == "event":
+                virtual_properties = self._BUILTIN_VIRTUAL_EVENT_PROPERTIES
+            elif event_type == "person":
+                virtual_properties = self._BUILTIN_VIRTUAL_PERSON_PROPERTIES
+            else:
+                virtual_properties = self._BUILTIN_VIRTUAL_GROUP_PROPERTIES
 
             matching_virtual_props = [p for p in virtual_properties if self._filter_virtual_property(p, query)]
 
@@ -759,8 +773,8 @@ class PropertyDefinitionViewSet(
         # Reimplement filtering logic in python for virtual properties
         v = q.validated_data
 
-        # Virtual properties only exist for person and groups
-        if v.get("type") not in ["person", "group"]:
+        # Virtual properties exist for events, persons, and groups
+        if v.get("type") not in ["event", "person", "group"]:
             return False
 
         # explicit name filter  (?properties=a,b,c)
