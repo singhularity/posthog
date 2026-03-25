@@ -239,6 +239,13 @@ class EventDefinitionViewSet(
         if exclude_hidden and EE_AVAILABLE:
             search_query = search_query + " AND (hidden IS NULL OR hidden = false)"
 
+        verified_filter = self.request.GET.get("verified", None)
+        if verified_filter is not None and EE_AVAILABLE:
+            if verified_filter.lower() == "true":
+                search_query = search_query + " AND verified = true"
+            elif verified_filter.lower() == "false":
+                search_query = search_query + " AND (verified IS NULL OR verified = false)"
+
         excluded_properties = self.request.GET.get("excluded_properties")
 
         if excluded_properties:

@@ -2,9 +2,10 @@ import './PropertyDefinitionsTable.scss'
 
 import { useActions, useValues } from 'kea'
 
-import { LemonInput, LemonSelect, LemonTag, Link } from '@posthog/lemon-ui'
+import { LemonInput, LemonSelect, LemonSelectOptions, LemonTag, Link } from '@posthog/lemon-ui'
 
 import { ObjectTags } from 'lib/components/ObjectTags/ObjectTags'
+import { TagSelect } from 'lib/components/TagSelect'
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
 import { EVENT_PROPERTY_DEFINITIONS_PER_PAGE } from 'lib/constants'
 import { LemonBanner } from 'lib/lemon-ui/LemonBanner'
@@ -19,6 +20,12 @@ import { urls } from 'scenes/urls'
 import { SceneContent } from '~/layout/scenes/components/SceneContent'
 import { SceneTitleSection } from '~/layout/scenes/components/SceneTitleSection'
 import { PropertyDefinition } from '~/types'
+
+const verifiedOptions: LemonSelectOptions<string> = [
+    { value: '', label: 'Any status' },
+    { value: 'true', label: 'Verified only' },
+    { value: 'false', label: 'Unverified only' },
+]
 
 export function PropertyDefinitionsTable(): JSX.Element {
     const { propertyDefinitions, propertyDefinitionsLoading, filters, propertyTypeOptions } =
@@ -94,18 +101,44 @@ export function PropertyDefinitionsTable(): JSX.Element {
                     Query with SQL
                 </Link>
             </LemonBanner>
-            <div className={cn('flex gap-2 flex-wrap')}>
+            <div className={cn('flex flex-wrap justify-between items-center gap-2')}>
                 <LemonInput
                     type="search"
                     placeholder="Search for properties"
                     onChange={(e) => setFilters({ property: e || '' })}
                     value={filters.property}
+                    className="flex-1 min-w-60"
                 />
-                <LemonSelect
-                    options={propertyTypeOptions}
-                    value={`${filters.type}::${filters.group_type_index ?? ''}`}
-                    onSelect={setPropertyType}
-                />
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <span>Tags:</span>
+                    <TagSelect
+                        defaultLabel="Any tags"
+                        value={filters.tags || []}
+                        onChange={(tags) => {
+                            setFilters({ tags })
+                        }}
+                        data-attr="property-tags-filter"
+                        size="small"
+                    />
+                    <span>Type:</span>
+                    <LemonSelect
+                        options={propertyTypeOptions}
+                        value={`${filters.type}::${filters.group_type_index ?? ''}`}
+                        onSelect={setPropertyType}
+                        size="small"
+                    />
+                    <span>Verified:</span>
+                    <LemonSelect
+                        value={filters.verified ?? ''}
+                        options={verifiedOptions}
+                        data-attr="property-verified-filter"
+                        dropdownMatchSelectWidth={false}
+                        onChange={(value) => {
+                            setFilters({ verified: value || undefined })
+                        }}
+                        size="small"
+                    />
+                </div>
             </div>
             <LemonTable
                 columns={columns}

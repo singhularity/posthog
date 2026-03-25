@@ -103,6 +103,18 @@ class PropertyDefinitionQuerySerializer(serializers.Serializer):
         default=False,
     )
 
+    verified = serializers.BooleanField(
+        help_text="Whether to return only verified (true) or unverified (false) property definitions",
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+
+    tags = serializers.CharField(
+        help_text="JSON-encoded list of tag names to filter by",
+        required=False,
+    )
+
     def validate(self, attrs):
         type_ = attrs.get("type", "event")
 
@@ -321,6 +333,22 @@ class QueryContext:
                     self.excluded_properties_filter + hidden_filter
                     if self.excluded_properties_filter
                     else hidden_filter
+                ),
+            )
+        return self
+
+    def with_verified_filter(self, verified: Optional[bool], use_enterprise_taxonomy: bool) -> Self:
+        if verified is not None and use_enterprise_taxonomy:
+            if verified:
+                verified_filter = " AND verified = true"
+            else:
+                verified_filter = " AND (verified IS NULL OR verified = false)"
+            return dataclasses.replace(
+                self,
+                excluded_properties_filter=(
+                    self.excluded_properties_filter + verified_filter
+                    if self.excluded_properties_filter
+                    else verified_filter
                 ),
             )
         return self
@@ -666,6 +694,7 @@ class PropertyDefinitionViewSet(
                 .with_hidden_filter(
                     query.validated_data.get("exclude_hidden", False), use_enterprise_taxonomy=EE_AVAILABLE
                 )
+                .with_verified_filter(query.validated_data.get("verified", None), use_enterprise_taxonomy=EE_AVAILABLE)
             )
 
             span.set_attribute("joins_event_property", query_context.should_join_event_property)
@@ -680,7 +709,20 @@ class PropertyDefinitionViewSet(
             span.set_attribute("full_count", full_count)
 
             # nosemgrep: python.django.security.audit.custom-expression-as-sql.custom-expression-as-sql (all user input goes through query_context.params)
-            return queryset.raw(query_context.as_sql(order_by_verified), params=query_context.params)
+            raw_queryset = queryset.raw(query_context.as_sql(order_by_verified), params=query_context.params)
+
+            # Apply tags filter if provided
+            tags = query.validated_data.get("tags")
+            if tags:
+                try:
+                    tags_list = json.loads(tags)
+                    if tags_list:
+                        ids = [obj.id for obj in raw_queryset]
+                        return queryset.filter(id__in=ids, tagged_items__tag__name__in=tags_list).distinct()
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            return raw_queryset
 
     def get_serializer_class(self) -> type[serializers.ModelSerializer]:
         serializer_class: type[serializers.ModelSerializer] = self.serializer_class
