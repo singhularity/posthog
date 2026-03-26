@@ -88,6 +88,21 @@ class HogFlow(UUIDTModel):
 def hog_flow_saved(sender, instance: HogFlow, created, **kwargs):
     reload_hog_flows_on_workers(team_id=instance.team_id, hog_flow_ids=[str(instance.id)])
 
+    # Re-sync next_run_at on all schedules when the workflow is saved,
+    # so that activating/deactivating a workflow updates schedule state.
+    try:
+        from products.workflows.backend.models.hog_flow_schedule import HogFlowSchedule
+        from products.workflows.backend.utils.schedule_sync import sync_next_run
+
+        for schedule in HogFlowSchedule.objects.filter(hog_flow=instance):
+            sync_next_run(schedule)
+    except Exception:
+        import structlog
+
+        structlog.get_logger(__name__).warning(
+            "Failed to sync schedules for HogFlow", hog_flow_id=str(instance.id), exc_info=True
+        )
+
 
 @receiver(post_save, sender=Action)
 def action_saved_for_hog_flows(sender, instance: Action, created, **kwargs):

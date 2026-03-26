@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
                         on_delete=django.db.models.deletion.CASCADE, related_name="schedules", to="posthog.hogflow"
                     ),
                 ),
-                ("team", models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, to="posthog.team")),
+                ("team", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="posthog.team")),
             ],
             options={
                 "abstract": False,

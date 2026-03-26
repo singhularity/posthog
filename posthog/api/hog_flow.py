@@ -212,23 +212,27 @@ class HogFlowScheduleSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "status", "next_run_at", "created_at", "updated_at"]
 
     def validate(self, data):
-        rrule_str = data.get("rrule")
+        # For partial updates, fall back to instance values
+        instance = self.instance
+        rrule_str = data.get("rrule", getattr(instance, "rrule", None))
+        starts_at = data.get("starts_at", getattr(instance, "starts_at", None))
+        timezone_str = data.get("timezone", getattr(instance, "timezone", "UTC"))
+
         if not rrule_str:
             raise serializers.ValidationError({"rrule": "RRULE string is required."})
 
-        try:
-            validate_rrule(rrule_str)
-        except (ValueError, TypeError) as e:
-            logger.warning("Invalid RRULE encountered during validation", rrule=rrule_str, error=str(e))
-            raise serializers.ValidationError({"rrule": "Invalid RRULE."})
+        if "rrule" in data:
+            try:
+                validate_rrule(rrule_str)
+            except (ValueError, TypeError) as e:
+                logger.warning("Invalid RRULE encountered during validation", rrule=rrule_str, error=str(e))
+                raise serializers.ValidationError({"rrule": "Invalid RRULE."})
 
-        if not data.get("starts_at"):
+        if not starts_at:
             raise serializers.ValidationError({"starts_at": "Start date is required."})
 
         try:
-            sample = compute_next_occurrences(
-                rrule_str, data["starts_at"], timezone_str=data.get("timezone", "UTC"), count=2
-            )
+            sample = compute_next_occurrences(rrule_str, starts_at, timezone_str=timezone_str, count=2)
         except (KeyError, ValueError):
             raise serializers.ValidationError({"timezone": "Invalid or unknown timezone."})
 
