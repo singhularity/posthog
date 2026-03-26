@@ -232,6 +232,8 @@ class HogFlowScheduleSerializer(serializers.ModelSerializer):
         except (KeyError, ValueError):
             raise serializers.ValidationError({"timezone": "Invalid or unknown timezone."})
 
+        if len(sample) == 0:
+            raise serializers.ValidationError({"rrule": "Schedule produces no future occurrences."})
         if len(sample) == 2 and (sample[1] - sample[0]) < timedelta(hours=1):
             raise serializers.ValidationError({"rrule": "Schedules must run at most once per hour."})
 

@@ -161,6 +161,14 @@ class TestHogFlowScheduleAPI(APIBaseTest):
         response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", payload)
         assert response.status_code == status.HTTP_201_CREATED
 
+    def test_rrule_validation_rejects_exhausted_schedule(self):
+        payload = _make_workflow_payload(
+            workflow_status="active",
+            schedules=[{**SCHEDULE, "rrule": "FREQ=DAILY;COUNT=1", "starts_at": "2020-01-01T09:00:00Z"}],
+        )
+        response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", payload)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
     def test_scheduled_runs_endpoint(self):
         workflow = self._create_batch_workflow(schedules=[SCHEDULE])
         response = self.client.get(f"/api/projects/{self.team.id}/hog_flows/{workflow['id']}/scheduled_runs/")
