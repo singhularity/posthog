@@ -76,9 +76,6 @@ class HogFlow(UUIDTModel):
     # Contains only billable action types: 'function', 'function_email', 'function_sms', 'function_push'
     billable_action_types = models.JSONField(default=list, null=True, blank=True)
 
-    # Schedule configuration: { rrule, starts_at, timezone, enabled }
-    schedule_config = models.JSONField(null=True, blank=True)
-
     # Draft storage for active workflows: stores pending edits separately from live config
     draft = models.JSONField(null=True, blank=True)
     draft_updated_at = models.DateTimeField(null=True, blank=True)
@@ -90,16 +87,15 @@ class HogFlow(UUIDTModel):
 @receiver(post_save, sender=HogFlow)
 def hog_flow_saved(sender, instance: HogFlow, created, **kwargs):
     reload_hog_flows_on_workers(team_id=instance.team_id, hog_flow_ids=[str(instance.id)])
-
     try:
         from products.workflows.backend.utils.schedule_sync import sync_schedule
 
         sync_schedule(instance, instance.team_id)
     except Exception:
-        logger.warning(
-            "Failed to sync schedule for HogFlow",
-            hog_flow_id=str(instance.id),
-            exc_info=True,
+        import structlog
+
+        structlog.get_logger(__name__).warning(
+            "Failed to sync schedule for HogFlow", hog_flow_id=str(instance.id), exc_info=True
         )
 
 

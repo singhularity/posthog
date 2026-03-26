@@ -539,8 +539,8 @@ function StepTriggerConfigurationBatch({
 
                     <LemonLabel>Schedule</LemonLabel>
                     <RecurringSchedulePicker
-                        schedule={workflow.schedule_config ?? null}
-                        onChange={(schedule) => setWorkflowInfo({ schedule_config: schedule })}
+                        schedule={workflow.schedules?.[0] ?? null}
+                        onChange={(schedule) => setWorkflowInfo({ schedules: schedule ? [schedule] : [] })}
                     />
                 </>
             )}

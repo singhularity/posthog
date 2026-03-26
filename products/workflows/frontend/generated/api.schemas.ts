@@ -279,6 +279,32 @@ export interface UserBasicApi {
     role_at_organization?: RoleAtOrganizationEnumApi | BlankEnumApi | NullEnumApi | null
 }
 
+/**
+ * * `active` - Active
+ * `paused` - Paused
+ * `completed` - Completed
+ */
+export type HogFlowScheduleStatusEnumApi =
+    (typeof HogFlowScheduleStatusEnumApi)[keyof typeof HogFlowScheduleStatusEnumApi]
+
+export const HogFlowScheduleStatusEnumApi = {
+    Active: 'active',
+    Paused: 'paused',
+    Completed: 'completed',
+} as const
+
+export interface HogFlowScheduleApi {
+    id?: string
+    rrule: string
+    starts_at: string
+    /** @maxLength 64 */
+    timezone?: string
+    variables?: unknown
+    readonly status: HogFlowScheduleStatusEnumApi
+    readonly created_at: string
+    readonly updated_at: string
+}
+
 export interface HogFlowMinimalApi {
     readonly id: string
     /** @nullable */
@@ -299,7 +325,7 @@ export interface HogFlowMinimalApi {
     readonly abort_action: string | null
     readonly variables: unknown | null
     readonly billable_action_types: unknown | null
-    readonly schedule_config: unknown | null
+    readonly schedules: readonly HogFlowScheduleApi[]
 }
 
 export interface PaginatedHogFlowMinimalListApi {
@@ -351,7 +377,7 @@ export interface HogFlowApi {
     readonly abort_action: string | null
     variables?: HogFlowApiVariablesItem[]
     readonly billable_action_types: unknown | null
-    schedule_config?: unknown | null
+    schedules?: HogFlowScheduleApi[]
 }
 
 export type PatchedHogFlowApiVariablesItem = { [key: string]: string }
@@ -379,7 +405,7 @@ export interface PatchedHogFlowApi {
     readonly abort_action?: string | null
     variables?: PatchedHogFlowApiVariablesItem[]
     readonly billable_action_types?: unknown | null
-    schedule_config?: unknown | null
+    schedules?: HogFlowScheduleApi[]
 }
 
 export type HogFlowTemplatesListParams = {

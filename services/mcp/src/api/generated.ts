@@ -15552,6 +15552,32 @@ export namespace Schemas {
       output_variable?: unknown | null;
     }
 
+    /**
+     * * `active` - Active
+    * `paused` - Paused
+    * `completed` - Completed
+     */
+    export type HogFlowScheduleStatusEnum = typeof HogFlowScheduleStatusEnum[keyof typeof HogFlowScheduleStatusEnum];
+
+
+    export const HogFlowScheduleStatusEnum = {
+      Active: 'active',
+      Paused: 'paused',
+      Completed: 'completed',
+    } as const;
+
+    export interface HogFlowSchedule {
+      id?: string;
+      rrule: string;
+      starts_at: string;
+      /** @maxLength 64 */
+      timezone?: string;
+      variables?: unknown;
+      readonly status: HogFlowScheduleStatusEnum;
+      readonly created_at: string;
+      readonly updated_at: string;
+    }
+
     export interface HogFlow {
       readonly id: string;
       /**
@@ -15575,7 +15601,7 @@ export namespace Schemas {
       readonly abort_action: string | null;
       variables?: HogFlowVariablesItem[];
       readonly billable_action_types: unknown | null;
-      schedule_config?: unknown | null;
+      schedules?: HogFlowSchedule[];
     }
 
     export interface HogFlowMinimal {
@@ -15598,7 +15624,7 @@ export namespace Schemas {
       readonly abort_action: string | null;
       readonly variables: unknown | null;
       readonly billable_action_types: unknown | null;
-      readonly schedule_config: unknown | null;
+      readonly schedules: readonly HogFlowSchedule[];
     }
 
     /**
@@ -22496,7 +22522,7 @@ export namespace Schemas {
       readonly abort_action?: string | null;
       variables?: PatchedHogFlowVariablesItem[];
       readonly billable_action_types?: unknown | null;
-      schedule_config?: unknown | null;
+      schedules?: HogFlowSchedule[];
     }
 
     /**

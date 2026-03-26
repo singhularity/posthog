@@ -18,16 +18,22 @@ interface DueRun {
     run_at: Date
     hog_flow_id: string
     team_id: number
+    schedule_id: string | null
 }
 
 interface HogFlowRow {
     status: string
     trigger: Record<string, unknown>
-    schedule_config: {
-        rrule: string
-        starts_at: string
-        timezone: string
-    } | null
+    variables: Array<{ key: string; default?: unknown }> | null
+}
+
+interface ScheduleRow {
+    id: string
+    rrule: string
+    starts_at: Date
+    timezone: string
+    variables: Record<string, unknown>
+    status: string
 }
 
 export class HogFlowScheduleService {
@@ -67,9 +73,9 @@ export class HogFlowScheduleService {
         try {
             await client.query('BEGIN')
 
-            // Query due runs directly from HogFlowScheduledRun
             const result = await client.query<DueRun>(
-                `SELECT r.id, r.run_at, r.hog_flow_id::text as hog_flow_id, r.team_id
+                `SELECT r.id, r.run_at, r.hog_flow_id::text as hog_flow_id, r.team_id,
+                        r.schedule_id::text as schedule_id
                  FROM workflows_hogflowscheduledrun r
                  WHERE r.status = 'pending'
                    AND r.run_at <= NOW()
@@ -81,9 +87,8 @@ export class HogFlowScheduleService {
 
             for (const run of result.rows) {
                 try {
-                    // Fetch the HogFlow to check it's active and get trigger type + schedule config
                     const hogFlowResult = await client.query<HogFlowRow>(
-                        `SELECT status, trigger, schedule_config FROM posthog_hogflow WHERE id = $1`,
+                        `SELECT status, trigger, variables FROM posthog_hogflow WHERE id = $1`,
                         [run.hog_flow_id]
                     )
 
@@ -122,9 +127,9 @@ export class HogFlowScheduleService {
                         [run.id]
                     )
 
-                    // Create the next pending run from schedule_config
-                    if (hogFlow.schedule_config) {
-                        await this.createNextPendingRun(client, run, hogFlow.schedule_config)
+                    // Create the next pending run from the schedule
+                    if (run.schedule_id) {
+                        await this.createNextPendingRun(client, run, hogFlow)
                     }
                 } catch (err) {
                     logger.error('HogFlowScheduleService: failed to process run', {
@@ -180,31 +185,56 @@ export class HogFlowScheduleService {
         })
     }
 
-    private async createNextPendingRun(
-        client: any,
-        completedRun: DueRun,
-        scheduleConfig: { rrule: string; starts_at: string; timezone: string }
-    ): Promise<void> {
-        const nextRunAt = this.computeNextOccurrence(
-            scheduleConfig.rrule,
-            new Date(scheduleConfig.starts_at),
-            new Date(completedRun.run_at),
-            scheduleConfig.timezone
+    private async createNextPendingRun(client: any, completedRun: DueRun, hogFlow: HogFlowRow): Promise<void> {
+        // Fetch the schedule that produced this run
+        const scheduleResult = await client.query<ScheduleRow>(
+            `SELECT id, rrule, starts_at, timezone, variables, status
+             FROM workflows_hogflowschedule
+             WHERE id = $1`,
+            [completedRun.schedule_id]
         )
 
-        if (!nextRunAt) {
-            // RRULE exhausted, clear schedule_config
-            await client.query(`UPDATE posthog_hogflow SET schedule_config = NULL, updated_at = NOW() WHERE id = $1`, [
-                completedRun.hog_flow_id,
-            ])
+        if (!scheduleResult.rows.length || scheduleResult.rows[0].status !== 'active') {
             return
         }
 
-        await client.query(
-            `INSERT INTO workflows_hogflowscheduledrun (id, team_id, hog_flow_id, run_at, status, created_at, updated_at)
-             VALUES (gen_random_uuid(), $1, $2, $3, 'pending', NOW(), NOW())`,
-            [completedRun.team_id, completedRun.hog_flow_id, nextRunAt]
+        const schedule = scheduleResult.rows[0]
+        const nextRunAt = this.computeNextOccurrence(
+            schedule.rrule,
+            new Date(schedule.starts_at),
+            new Date(completedRun.run_at),
+            schedule.timezone
         )
+
+        if (!nextRunAt) {
+            // RRULE exhausted, mark schedule as completed
+            await client.query(
+                `UPDATE workflows_hogflowschedule SET status = 'completed', updated_at = NOW() WHERE id = $1`,
+                [schedule.id]
+            )
+            return
+        }
+
+        // Resolve variables: HogFlow defaults merged with schedule overrides
+        const resolvedVariables = this.resolveVariables(hogFlow.variables, schedule.variables)
+
+        await client.query(
+            `INSERT INTO workflows_hogflowscheduledrun
+             (id, team_id, hog_flow_id, schedule_id, run_at, status, variables, created_at, updated_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, 'pending', $5, NOW(), NOW())`,
+            [completedRun.team_id, completedRun.hog_flow_id, schedule.id, nextRunAt, JSON.stringify(resolvedVariables)]
+        )
+    }
+
+    private resolveVariables(
+        hogFlowVariables: Array<{ key: string; default?: unknown }> | null,
+        scheduleVariables: Record<string, unknown>
+    ): Record<string, unknown> {
+        const defaults: Record<string, unknown> = {}
+        for (const v of hogFlowVariables || []) {
+            defaults[v.key] = v.default ?? null
+        }
+        return { ...defaults, ...scheduleVariables }
     }
 
     private computeNextOccurrence(

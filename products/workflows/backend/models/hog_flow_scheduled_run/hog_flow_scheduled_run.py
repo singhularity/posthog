@@ -6,7 +6,7 @@ from posthog.models.utils import RootTeamMixin, UUIDTModel
 class HogFlowScheduledRun(RootTeamMixin, UUIDTModel):
     """
     Tracks a single scheduled execution of a HogFlow.
-    One pending row represents the next run. Completed rows serve as execution history.
+    One pending row per schedule represents the next run. Completed rows serve as execution history.
     """
 
     class Meta:
@@ -16,14 +16,18 @@ class HogFlowScheduledRun(RootTeamMixin, UUIDTModel):
         ]
 
     class Status(models.TextChoices):
-        PENDING = "pending"  # Next run, waiting to be picked up
-        COMPLETED = "completed"  # Successfully triggered
-        FAILED = "failed"  # Failed to trigger
+        PENDING = "pending"
+        COMPLETED = "completed"
+        FAILED = "failed"
 
     team = models.ForeignKey("posthog.Team", on_delete=models.DO_NOTHING)
     hog_flow = models.ForeignKey("posthog.HogFlow", on_delete=models.DO_NOTHING, related_name="scheduled_runs")
-    run_at = models.DateTimeField(db_index=True)  # When this run should execute (UTC)
+    schedule = models.ForeignKey(
+        "workflows.HogFlowSchedule", null=True, blank=True, on_delete=models.SET_NULL, related_name="scheduled_runs"
+    )
+    run_at = models.DateTimeField(db_index=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    variables = models.JSONField(default=dict)  # Snapshot of resolved variables at creation time
     batch_job = models.ForeignKey("workflows.HogFlowBatchJob", null=True, blank=True, on_delete=models.SET_NULL)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)

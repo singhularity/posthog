@@ -3,8 +3,6 @@ from zoneinfo import ZoneInfo
 
 from dateutil.rrule import rrulestr
 
-UTC = UTC
-
 
 def validate_rrule(rrule_string: str) -> None:
     """Validate an RRULE string. Raises ValueError if invalid."""

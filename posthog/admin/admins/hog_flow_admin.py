@@ -4,21 +4,42 @@ from django.utils.html import format_html
 
 from posthog.models.hog_flow.hog_flow import HogFlow
 
+from products.workflows.backend.models.hog_flow_schedule import HogFlowSchedule
 from products.workflows.backend.models.hog_flow_scheduled_run import HogFlowScheduledRun
+
+
+class HogFlowScheduleInline(admin.TabularInline):
+    model = HogFlowSchedule
+    extra = 0
+    readonly_fields = ("id", "rrule", "starts_at", "timezone", "variables", "status")
+    fields = ("rrule", "starts_at", "timezone", "variables", "status")
+    ordering = ("-created_at",)
+    max_num = 10
+    show_change_link = False
 
 
 class HogFlowScheduledRunInline(admin.TabularInline):
     model = HogFlowScheduledRun
     extra = 0
-    readonly_fields = ("id", "run_at", "status", "batch_job", "started_at", "completed_at", "failure_reason")
-    fields = ("run_at", "status", "batch_job", "started_at", "completed_at", "failure_reason")
+    readonly_fields = (
+        "id",
+        "run_at",
+        "status",
+        "schedule",
+        "variables",
+        "batch_job",
+        "started_at",
+        "completed_at",
+        "failure_reason",
+    )
+    fields = ("run_at", "status", "schedule", "variables", "batch_job", "started_at", "completed_at", "failure_reason")
     ordering = ("-run_at",)
     max_num = 20
     show_change_link = False
 
 
 class HogFlowAdmin(admin.ModelAdmin):
-    inlines = [HogFlowScheduledRunInline]
+    inlines = [HogFlowScheduleInline, HogFlowScheduledRunInline]
     list_display = ("id", "name", "status", "version", "team_link", "created_at")
     list_filter = (
         ("status", admin.ChoicesFieldListFilter),
@@ -42,7 +63,6 @@ class HogFlowAdmin(admin.ModelAdmin):
         "actions",
         "variables",
         "billable_action_types",
-        "schedule_config",
     )
     fields = (
         "name",
@@ -62,7 +82,6 @@ class HogFlowAdmin(admin.ModelAdmin):
         "actions",
         "variables",
         "billable_action_types",
-        "schedule_config",
     )
 
     @admin.display(description="Team")

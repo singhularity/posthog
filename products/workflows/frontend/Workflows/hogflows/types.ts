@@ -49,14 +49,19 @@ export const HogFlowSchema = z.object({
     abort_action: z.string().optional(),
     edges: z.array(HogFlowEdgeSchema),
     variables: z.array(CyclotronJobInputSchemaTypeSchema).optional().nullable(),
-    schedule_config: z
-        .object({
-            rrule: z.string(),
-            starts_at: z.string(),
-            timezone: z.string().optional(),
-        })
+    schedules: z
+        .array(
+            z.object({
+                id: z.string().optional(),
+                rrule: z.string(),
+                starts_at: z.string(),
+                timezone: z.string().optional(),
+                variables: z.record(z.any()).optional(),
+                status: z.string().optional(),
+            })
+        )
         .optional()
-        .nullable(),
+        .default([]),
     updated_at: z.string(),
     created_at: z.string(),
 })
