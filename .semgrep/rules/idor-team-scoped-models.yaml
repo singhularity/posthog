@@ -304,7 +304,6 @@ rules:
                         |HogFlow
                         |HogFlowBatchJob
                         |HogFlowSchedule
-                        |HogFlowScheduledRun
                         |HogFlowTemplate
                         |HogFunction
                         |Hook
