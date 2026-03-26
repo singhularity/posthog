@@ -88,7 +88,7 @@ export function InsightAsScene({ insightId, attachTo, tabId }: InsightAsScenePro
         <BindLogic logic={insightLogic} props={insightProps}>
             <InsightModals insightLogicProps={insightProps} />
             <SceneContent className={clsx('Insight', fullHeightEdit && '!p-0 !gap-0 h-[calc(100vh-3rem)]')}>
-                <div className={clsx(fullHeightEdit && 'px-4 pt-2 pb-2 shrink-0 border-b [&_.-mt-4]:mt-0')}>
+                <div className={clsx(fullHeightEdit && 'px-4 pb-2 shrink-0 border-b')}>
                     <InsightPageHeader insightLogicProps={insightProps} />
 
                     {hasOverrides && (
