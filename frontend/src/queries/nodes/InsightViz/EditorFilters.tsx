@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
+import posthog from 'posthog-js'
 import { useEffect, useMemo, useRef } from 'react'
 import { CSSTransition } from 'react-transition-group'
 
@@ -120,6 +121,12 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
         []
     )
     const { desiredSize: panelWidth, isResizeInProgress: isResizing } = useValues(resizerLogic(resizerProps))
+
+    useEffect(() => {
+        if (editorPanelsEnabled && showing) {
+            posthog.capture('editor panel shown', { panel_width: panelWidth })
+        }
+    }, [editorPanelsEnabled, showing]) // oxlint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (previousQuery && maxSuggestionActionsBanner.current) {
