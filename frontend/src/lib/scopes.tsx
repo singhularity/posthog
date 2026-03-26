@@ -46,6 +46,7 @@ export const API_SCOPES: APIScope[] = [
     { key: 'llm_gateway', objectName: 'LLM gateway', objectPlural: 'LLM gateway', disabledActions: ['write'] },
     { key: 'llm_prompt', objectName: 'LLM prompt', objectPlural: 'LLM prompts' },
     { key: 'logs', objectName: 'Logs', objectPlural: 'logs' },
+    { key: 'mcp_analytics', objectName: 'MCP analytics', objectPlural: 'MCP analytics submissions' },
     { key: 'notebook', objectName: 'Notebook', objectPlural: 'notebooks' },
     { key: 'organization', objectName: 'Organization', objectPlural: 'organizations', disabledWhenProjectScoped: true },
     {
@@ -155,7 +156,15 @@ export const API_KEY_SCOPE_PRESETS: {
         value: 'mcp_server',
         label: 'MCP Server',
         scopes: API_SCOPES.filter(({ key }) => !key.includes('llm_gateway')).map(({ key }) =>
-            ['feature_flag', 'insight', 'dashboard', 'survey', 'experiment', 'event_definition'].includes(key)
+            [
+                'feature_flag',
+                'insight',
+                'dashboard',
+                'survey',
+                'experiment',
+                'event_definition',
+                'mcp_analytics',
+            ].includes(key)
                 ? `${key}:write`
                 : `${key}:read`
         ),
@@ -196,6 +205,8 @@ export const MCP_SERVER_OAUTH_SCOPES = [
     'event_definition:write',
     'error_tracking:read',
     'logs:read',
+    'mcp_analytics:read',
+    'mcp_analytics:write',
 ]
 
 export const getScopeDescription = (scope: string): string | undefined => {

@@ -49,6 +49,7 @@ PRODUCTS_APPS = [
     "products.live_debugger.backend.apps.LiveDebuggerConfig",
     "products.experiments.backend.apps.ExperimentsConfig",
     "products.feature_flags.backend.apps.FeatureFlagsConfig",
+    "products.mcp_analytics.backend.apps.MCPAnalyticsConfig",
     "products.customer_analytics.backend.apps.CustomerAnalyticsConfig",
     "products.conversations.backend.apps.ConversationsConfig",
     "products.slack_app.backend.apps.SlackAppConfig",

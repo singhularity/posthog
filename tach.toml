@@ -22,6 +22,7 @@ depends_on = [
     "products.event_definitions",
     "products.llm_analytics",
     "products.logs",
+    "products.mcp_analytics",
 ]
 
 [[modules]]
@@ -81,6 +82,7 @@ depends_on = [
     "products.live_debugger",
     "products.llm_analytics",
     "products.logs",
+    "products.mcp_analytics",
     "products.marketing_analytics",
     "products.mcp_store",
     "products.messaging",
@@ -256,6 +258,13 @@ layer = "non_isolated"
 
 [[modules]]
 path = "products.logs"
+depends_on = [
+    "posthog",
+]
+layer = "non_isolated"
+
+[[modules]]
+path = "products.mcp_analytics"
 depends_on = [
     "posthog",
 ]

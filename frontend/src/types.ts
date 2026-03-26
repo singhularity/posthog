@@ -5141,6 +5141,7 @@ export type APIScopeObject =
     | 'llm_prompt'
     | 'llm_provider_key'
     | 'logs'
+    | 'mcp_analytics'
     | 'notebook'
     | 'organization'
     | 'organization_integration'

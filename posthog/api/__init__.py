@@ -18,6 +18,7 @@ import products.mcp_store.backend.api as mcp_store
 import products.signals.backend.views as signals
 import products.conversations.backend.api as conversations
 import products.live_debugger.backend.api as live_debugger
+import products.mcp_analytics.backend.api as mcp_analytics
 import products.surveys.backend.api.survey as survey
 import products.revenue_analytics.backend.api as revenue_analytics
 import products.marketing_analytics.backend.api as marketing_analytics
@@ -1362,6 +1363,20 @@ environments_router.register(
     r"mcp_tools",
     MCPToolsViewSet,
     "environment_mcp_tools",
+    ["team_id"],
+)
+
+environments_router.register(
+    r"mcp_analytics/feedback",
+    mcp_analytics.MCPFeedbackViewSet,
+    "environment_mcp_analytics_feedback",
+    ["team_id"],
+)
+
+environments_router.register(
+    r"mcp_analytics/missing_capabilities",
+    mcp_analytics.MCPMissingCapabilityViewSet,
+    "environment_mcp_analytics_missing_capabilities",
     ["team_id"],
 )
 

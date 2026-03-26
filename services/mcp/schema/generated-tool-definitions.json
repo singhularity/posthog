@@ -989,6 +989,36 @@
             "readOnlyHint": false
         }
     },
+    "mcp-feedback-submit": {
+        "description": "Submit qualitative feedback about the current MCP workflow, tool result, or product experience. Use this when the available tools worked but the experience was confusing, incomplete, or could be improved.",
+        "category": "MCP analytics",
+        "feature": "mcp_analytics",
+        "summary": "Submit MCP feedback",
+        "title": "Submit MCP feedback",
+        "required_scopes": ["mcp_analytics:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
+    "mcp-missing-capability-report": {
+        "description": "Report that the current MCP tools are insufficient for the user's goal. Use this when a missing tool, missing workflow support, or missing explanation blocks progress.",
+        "category": "MCP analytics",
+        "feature": "mcp_analytics",
+        "summary": "Report missing capability",
+        "title": "Report missing capability",
+        "required_scopes": ["mcp_analytics:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
     "notebooks-list": {
         "description": "List all notebooks in the project. Supports filtering by search term, created_by, last_modified_by, date_from, date_to, and contains. Returns title, short_id, and creation/modification metadata.",
         "category": "Notebooks",
