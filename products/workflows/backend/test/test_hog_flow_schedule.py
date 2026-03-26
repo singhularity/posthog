@@ -79,8 +79,15 @@ class TestHogFlowScheduleAPI(APIBaseTest):
         workflow = self._create_batch_workflow(schedules=[SCHEDULE, schedule2])
         schedules = HogFlowSchedule.objects.filter(hog_flow_id=workflow["id"])
         assert schedules.count() == 2
+
         runs = HogFlowScheduledRun.objects.filter(hog_flow_id=workflow["id"], status="pending")
         assert runs.count() == 2
+        # Each run links to a different schedule
+        schedule_ids = {r.schedule_id for r in runs}
+        assert len(schedule_ids) == 2
+        # Runs have different run_at times (weekly vs daily produce different next occurrences)
+        run_times = {r.run_at for r in runs}
+        assert len(run_times) == 2
 
     def test_removing_schedule_deletes_pending_run(self):
         workflow = self._create_batch_workflow(schedules=[SCHEDULE])
@@ -175,7 +182,7 @@ class TestHogFlowScheduleAPI(APIBaseTest):
         assert response.status_code == status.HTTP_200_OK
         assert len(response.json()) == 1
 
-    def test_schedule_config_cleared_for_non_batch_trigger(self):
+    def test_schedules_cleared_for_non_batch_trigger(self):
         payload = _make_workflow_payload(
             workflow_status="active",
             schedules=[SCHEDULE],
@@ -266,12 +273,12 @@ class TestHogFlowScheduleAPI(APIBaseTest):
         regions = {runs[0].variables["region"], runs[1].variables["region"]}
         assert regions == {"US", "EU"}
 
-    def test_schedule_with_timezone(self):
-        schedule = {**SCHEDULE, "timezone": "US/Eastern"}
-        workflow = self._create_batch_workflow(schedules=[schedule])
+    def test_schedule_with_non_default_timezone(self):
+        schedule_data = {**SCHEDULE, "timezone": "US/Eastern"}
+        workflow = self._create_batch_workflow(schedules=[schedule_data])
 
-        s = HogFlowSchedule.objects.get(hog_flow_id=workflow["id"])
-        assert s.timezone == "US/Eastern"
+        schedule = HogFlowSchedule.objects.get(hog_flow_id=workflow["id"])
+        assert schedule.timezone == "US/Eastern"
 
     def test_repeated_sync_produces_one_pending_run_per_schedule(self):
         workflow = self._create_batch_workflow(schedules=[SCHEDULE])
@@ -285,3 +292,17 @@ class TestHogFlowScheduleAPI(APIBaseTest):
 
         runs = HogFlowScheduledRun.objects.filter(hog_flow=hog_flow, status="pending")
         assert runs.count() == 1
+
+    def test_patch_without_schedules_key_leaves_schedules_untouched(self):
+        workflow = self._create_batch_workflow(schedules=[SCHEDULE])
+        assert HogFlowSchedule.objects.filter(hog_flow_id=workflow["id"]).count() == 1
+
+        # PATCH only the name, don't send schedules key
+        response = self.client.patch(
+            f"/api/projects/{self.team.id}/hog_flows/{workflow['id']}",
+            {"name": "Renamed Workflow"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        assert HogFlowSchedule.objects.filter(hog_flow_id=workflow["id"]).count() == 1
+        assert HogFlowScheduledRun.objects.filter(hog_flow_id=workflow["id"], status="pending").count() == 1

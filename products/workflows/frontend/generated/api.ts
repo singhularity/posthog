@@ -13,7 +13,9 @@ import type {
     HogFlowTemplateApi,
     HogFlowTemplatesListParams,
     HogFlowsListParams,
+    HogFlowsScheduledRunsListParams,
     PaginatedHogFlowMinimalListApi,
+    PaginatedHogFlowScheduledRunListApi,
     PaginatedHogFlowTemplateListApi,
     PatchedHogFlowApi,
     PatchedHogFlowTemplateApi,
@@ -354,16 +356,33 @@ export const hogFlowsMetricsTotalsRetrieve = async (
     })
 }
 
-export const getHogFlowsScheduledRunsRetrieveUrl = (projectId: string, id: string) => {
-    return `/api/projects/${projectId}/hog_flows/${id}/scheduled_runs/`
-}
-
-export const hogFlowsScheduledRunsRetrieve = async (
+export const getHogFlowsScheduledRunsListUrl = (
     projectId: string,
     id: string,
+    params?: HogFlowsScheduledRunsListParams
+) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/hog_flows/${id}/scheduled_runs/?${stringifiedParams}`
+        : `/api/projects/${projectId}/hog_flows/${id}/scheduled_runs/`
+}
+
+export const hogFlowsScheduledRunsList = async (
+    projectId: string,
+    id: string,
+    params?: HogFlowsScheduledRunsListParams,
     options?: RequestInit
-): Promise<HogFlowApi> => {
-    return apiMutator<HogFlowApi>(getHogFlowsScheduledRunsRetrieveUrl(projectId, id), {
+): Promise<PaginatedHogFlowScheduledRunListApi> => {
+    return apiMutator<PaginatedHogFlowScheduledRunListApi>(getHogFlowsScheduledRunsListUrl(projectId, id, params), {
         ...options,
         method: 'GET',
     })

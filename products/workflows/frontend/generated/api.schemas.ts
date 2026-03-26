@@ -408,6 +408,47 @@ export interface PatchedHogFlowApi {
     schedules?: HogFlowScheduleApi[]
 }
 
+/**
+ * * `pending` - Pending
+ * `completed` - Completed
+ * `failed` - Failed
+ */
+export type HogFlowScheduledRunStatusEnumApi =
+    (typeof HogFlowScheduledRunStatusEnumApi)[keyof typeof HogFlowScheduledRunStatusEnumApi]
+
+export const HogFlowScheduledRunStatusEnumApi = {
+    Pending: 'pending',
+    Completed: 'completed',
+    Failed: 'failed',
+} as const
+
+export interface HogFlowScheduledRunApi {
+    readonly id: string
+    readonly run_at: string
+    readonly status: HogFlowScheduledRunStatusEnumApi
+    /** @nullable */
+    readonly schedule: string | null
+    readonly variables: unknown
+    /** @nullable */
+    readonly batch_job: string | null
+    /** @nullable */
+    readonly started_at: string | null
+    /** @nullable */
+    readonly completed_at: string | null
+    /** @nullable */
+    readonly failure_reason: string | null
+    readonly created_at: string
+}
+
+export interface PaginatedHogFlowScheduledRunListApi {
+    count: number
+    /** @nullable */
+    next?: string | null
+    /** @nullable */
+    previous?: string | null
+    results: HogFlowScheduledRunApi[]
+}
+
 export type HogFlowTemplatesListParams = {
     /**
      * Number of results to return per page.
@@ -420,6 +461,21 @@ export type HogFlowTemplatesListParams = {
 }
 
 export type HogFlowsListParams = {
+    created_at?: string
+    created_by?: number
+    id?: string
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number
+    updated_at?: string
+}
+
+export type HogFlowsScheduledRunsListParams = {
     created_at?: string
     created_by?: number
     id?: string

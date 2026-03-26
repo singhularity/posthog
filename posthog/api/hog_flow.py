@@ -383,51 +383,58 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         return data
 
     def create(self, validated_data: dict, *args, **kwargs) -> HogFlow:
+        from django.db import transaction
+
         request = self.context["request"]
         team_id = self.context["team_id"]
         schedules_data = validated_data.pop("schedules", [])
         validated_data["created_by"] = request.user
         validated_data["team_id"] = team_id
 
-        instance = super().create(validated_data=validated_data)
+        with transaction.atomic():
+            instance = super().create(validated_data=validated_data)
 
-        if schedules_data:
-            for schedule_data in schedules_data:
-                schedule_data.pop("id", None)
-                HogFlowSchedule.objects.create(team_id=team_id, hog_flow=instance, **schedule_data)
-            # post_save already fired but schedules didn't exist yet, so re-sync
-            from products.workflows.backend.utils.schedule_sync import sync_schedule
+            if schedules_data:
+                for schedule_data in schedules_data:
+                    schedule_data.pop("id", None)
+                    HogFlowSchedule.objects.create(team_id=team_id, hog_flow=instance, **schedule_data)
+                # post_save already fired but schedules didn't exist yet, so re-sync
+                from products.workflows.backend.utils.schedule_sync import sync_schedule
 
-            sync_schedule(instance, team_id)
+                sync_schedule(instance, team_id)
 
         return instance
 
     def update(self, instance, validated_data):
+        from django.db import transaction
+
         schedules_data = validated_data.pop("schedules", None)
 
-        # Reconcile schedules BEFORE saving the HogFlow, because the post_save
-        # signal triggers sync_schedule which reads the current schedules.
-        if schedules_data is not None:
-            team_id = self.context["team_id"]
-            incoming_ids = {s["id"] for s in schedules_data if "id" in s}
-            existing = {s.id: s for s in instance.schedules.all()}
+        with transaction.atomic():
+            # Reconcile schedules BEFORE saving the HogFlow, because the post_save
+            # signal triggers sync_schedule which reads the current schedules.
+            if schedules_data is not None:
+                team_id = self.context["team_id"]
+                incoming_ids = {schedule["id"] for schedule in schedules_data if "id" in schedule}
+                existing_schedules = {schedule.id: schedule for schedule in instance.schedules.all()}
 
-            # Delete schedules not in the incoming list
-            for eid in existing:
-                if eid not in incoming_ids:
-                    existing[eid].delete()
+                # Delete schedules not in the incoming list
+                for existing_id in existing_schedules:
+                    if existing_id not in incoming_ids:
+                        existing_schedules[existing_id].delete()
 
-            # Create or update
-            for schedule_data in schedules_data:
-                sid = schedule_data.pop("id", None)
-                if sid and sid in existing:
-                    for key, value in schedule_data.items():
-                        setattr(existing[sid], key, value)
-                    existing[sid].save()
-                else:
-                    HogFlowSchedule.objects.create(team_id=team_id, hog_flow=instance, **schedule_data)
+                # Create or update
+                for schedule_data in schedules_data:
+                    schedule_id = schedule_data.pop("id", None)
+                    if schedule_id and schedule_id in existing_schedules:
+                        for key, value in schedule_data.items():
+                            setattr(existing_schedules[schedule_id], key, value)
+                        existing_schedules[schedule_id].save()
+                    else:
+                        HogFlowSchedule.objects.create(team_id=team_id, hog_flow=instance, **schedule_data)
 
-        instance = super().update(instance, validated_data)
+            instance = super().update(instance, validated_data)
+
         return instance
 
 
@@ -624,6 +631,7 @@ class HogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMixin, vie
             serializer = HogFlowBatchJobSerializer(batch_jobs, many=True)
             return Response(serializer.data)
 
+    @extend_schema(responses=HogFlowScheduledRunSerializer(many=True))
     @action(detail=True, methods=["GET"])
     def scheduled_runs(self, request: Request, *args, **kwargs):
         hog_flow = self.get_object()
