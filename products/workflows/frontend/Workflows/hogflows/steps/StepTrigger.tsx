@@ -50,7 +50,6 @@ import { getRegisteredTriggerTypes } from '../registry/triggers/triggerTypeRegis
 import { HogFlowAction } from '../types'
 import { batchTriggerLogic, BLAST_RADIUS_LIMIT } from './batchTriggerLogic'
 import { HogFlowFunctionConfiguration } from './components/HogFlowFunctionConfiguration'
-import { RecurringSchedulePicker } from './components/RecurringSchedulePicker'
 
 type TriggerAction = Extract<HogFlowAction, { type: 'trigger' }>
 type EventTriggerConfig = {
@@ -489,9 +488,7 @@ function StepTriggerConfigurationBatch({
     action: Extract<HogFlowAction, { type: 'trigger' }>
     config: Extract<HogFlowAction['config'], { type: 'batch' }>
 }): JSX.Element {
-    const { partialSetWorkflowActionConfig, setWorkflowInfo } = useActions(workflowLogic)
-    const { workflow } = useValues(workflowLogic)
-    const { featureFlags } = useValues(featureFlagLogic)
+    const { partialSetWorkflowActionConfig } = useActions(workflowLogic)
 
     return (
         <div className="flex flex-col gap-2 my-2 w-full">
@@ -533,17 +530,7 @@ function StepTriggerConfigurationBatch({
                 />
             </div>
 
-            {featureFlags[FEATURE_FLAGS.WORKFLOWS_RECURRING_SCHEDULES] && (
-                <>
-                    <LemonDivider />
-
-                    <LemonLabel>Schedule</LemonLabel>
-                    <RecurringSchedulePicker
-                        schedule={workflow.schedules?.[0] ?? null}
-                        onChange={(schedule) => setWorkflowInfo({ schedules: schedule ? [schedule] : [] })}
-                    />
-                </>
-            )}
+            {/* TODO: Integrate RecurringSchedulePicker with separate schedule CRUD endpoints */}
         </div>
     )
 }

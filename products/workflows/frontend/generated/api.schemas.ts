@@ -279,32 +279,6 @@ export interface UserBasicApi {
     role_at_organization?: RoleAtOrganizationEnumApi | BlankEnumApi | NullEnumApi | null
 }
 
-/**
- * * `active` - Active
- * `paused` - Paused
- * `completed` - Completed
- */
-export type HogFlowScheduleStatusEnumApi =
-    (typeof HogFlowScheduleStatusEnumApi)[keyof typeof HogFlowScheduleStatusEnumApi]
-
-export const HogFlowScheduleStatusEnumApi = {
-    Active: 'active',
-    Paused: 'paused',
-    Completed: 'completed',
-} as const
-
-export interface HogFlowScheduleApi {
-    id?: string
-    rrule: string
-    starts_at: string
-    /** @maxLength 64 */
-    timezone?: string
-    variables?: unknown
-    readonly status: HogFlowScheduleStatusEnumApi
-    readonly created_at: string
-    readonly updated_at: string
-}
-
 export interface HogFlowMinimalApi {
     readonly id: string
     /** @nullable */
@@ -325,7 +299,6 @@ export interface HogFlowMinimalApi {
     readonly abort_action: string | null
     readonly variables: unknown | null
     readonly billable_action_types: unknown | null
-    readonly schedules: readonly HogFlowScheduleApi[]
 }
 
 export interface PaginatedHogFlowMinimalListApi {
@@ -377,7 +350,6 @@ export interface HogFlowApi {
     readonly abort_action: string | null
     variables?: HogFlowApiVariablesItem[]
     readonly billable_action_types: unknown | null
-    schedules?: HogFlowScheduleApi[]
 }
 
 export type PatchedHogFlowApiVariablesItem = { [key: string]: string }
@@ -405,48 +377,43 @@ export interface PatchedHogFlowApi {
     readonly abort_action?: string | null
     variables?: PatchedHogFlowApiVariablesItem[]
     readonly billable_action_types?: unknown | null
-    schedules?: HogFlowScheduleApi[]
 }
 
 /**
- * * `pending` - Pending
+ * * `active` - Active
+ * `paused` - Paused
  * `completed` - Completed
- * `failed` - Failed
  */
-export type HogFlowScheduledRunStatusEnumApi =
-    (typeof HogFlowScheduledRunStatusEnumApi)[keyof typeof HogFlowScheduledRunStatusEnumApi]
+export type HogFlowScheduleStatusEnumApi =
+    (typeof HogFlowScheduleStatusEnumApi)[keyof typeof HogFlowScheduleStatusEnumApi]
 
-export const HogFlowScheduledRunStatusEnumApi = {
-    Pending: 'pending',
+export const HogFlowScheduleStatusEnumApi = {
+    Active: 'active',
+    Paused: 'paused',
     Completed: 'completed',
-    Failed: 'failed',
 } as const
 
-export interface HogFlowScheduledRunApi {
+export interface HogFlowScheduleApi {
     readonly id: string
-    readonly run_at: string
-    readonly status: HogFlowScheduledRunStatusEnumApi
+    rrule: string
+    starts_at: string
+    /** @maxLength 64 */
+    timezone?: string
+    variables?: unknown
+    readonly status: HogFlowScheduleStatusEnumApi
     /** @nullable */
-    readonly schedule: string | null
-    readonly variables: unknown
-    /** @nullable */
-    readonly batch_job: string | null
-    /** @nullable */
-    readonly started_at: string | null
-    /** @nullable */
-    readonly completed_at: string | null
-    /** @nullable */
-    readonly failure_reason: string | null
+    readonly next_run_at: string | null
     readonly created_at: string
+    readonly updated_at: string
 }
 
-export interface PaginatedHogFlowScheduledRunListApi {
+export interface PaginatedHogFlowScheduleListApi {
     count: number
     /** @nullable */
     next?: string | null
     /** @nullable */
     previous?: string | null
-    results: HogFlowScheduledRunApi[]
+    results: HogFlowScheduleApi[]
 }
 
 export type HogFlowTemplatesListParams = {
@@ -475,7 +442,22 @@ export type HogFlowsListParams = {
     updated_at?: string
 }
 
-export type HogFlowsScheduledRunsListParams = {
+export type HogFlowsSchedulesListParams = {
+    created_at?: string
+    created_by?: number
+    id?: string
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number
+    updated_at?: string
+}
+
+export type HogFlowsSchedulesCreateParams = {
     created_at?: string
     created_by?: number
     id?: string

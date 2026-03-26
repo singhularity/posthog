@@ -13,27 +13,21 @@ import {
 } from '~/types'
 import { logger } from '~/utils/logger'
 
-interface DueRun {
+interface DueSchedule {
     id: string
-    run_at: Date
+    next_run_at: Date
     hog_flow_id: string
     team_id: number
-    schedule_id: string | null
+    rrule: string
+    starts_at: Date
+    timezone: string
+    variables: Record<string, unknown>
 }
 
 interface HogFlowRow {
     status: string
     trigger: Record<string, unknown>
     variables: Array<{ key: string; default?: unknown }> | null
-}
-
-interface ScheduleRow {
-    id: string
-    rrule: string
-    starts_at: Date
-    timezone: string
-    variables: Record<string, unknown>
-    status: string
 }
 
 export class HogFlowScheduleService {
@@ -73,32 +67,32 @@ export class HogFlowScheduleService {
         try {
             await client.query('BEGIN')
 
-            const result = await client.query<DueRun>(
-                `SELECT r.id, r.run_at, r.hog_flow_id::text as hog_flow_id, r.team_id,
-                        r.schedule_id::text as schedule_id
-                 FROM workflows_hogflowscheduledrun r
-                 WHERE r.status = 'pending'
-                   AND r.run_at <= NOW()
-                 ORDER BY r.run_at ASC
+            // Query due schedules directly from HogFlowSchedule
+            const result = await client.query<DueSchedule>(
+                `SELECT s.id, s.next_run_at, s.hog_flow_id::text as hog_flow_id, s.team_id,
+                        s.rrule, s.starts_at, s.timezone, s.variables
+                 FROM workflows_hogflowschedule s
+                 WHERE s.status = 'active'
+                   AND s.next_run_at IS NOT NULL
+                   AND s.next_run_at <= NOW()
+                 ORDER BY s.next_run_at ASC
                  LIMIT $1
-                 FOR UPDATE OF r SKIP LOCKED`,
+                 FOR UPDATE OF s SKIP LOCKED`,
                 [this.batchSize]
             )
 
-            for (const run of result.rows) {
+            for (const schedule of result.rows) {
                 try {
                     const hogFlowResult = await client.query<HogFlowRow>(
                         `SELECT status, trigger, variables FROM posthog_hogflow WHERE id = $1`,
-                        [run.hog_flow_id]
+                        [schedule.hog_flow_id]
                     )
 
                     if (!hogFlowResult.rows.length || hogFlowResult.rows[0].status !== 'active') {
+                        // Workflow no longer active, clear next_run_at
                         await client.query(
-                            `UPDATE workflows_hogflowscheduledrun
-                             SET status = 'failed', completed_at = NOW(), updated_at = NOW(),
-                                 failure_reason = 'Workflow not active'
-                             WHERE id = $1`,
-                            [run.id]
+                            `UPDATE workflows_hogflowschedule SET next_run_at = NULL, updated_at = NOW() WHERE id = $1`,
+                            [schedule.id]
                         )
                         continue
                     }
@@ -107,41 +101,46 @@ export class HogFlowScheduleService {
                     const triggerType = (hogFlow.trigger as Record<string, unknown>)?.type
 
                     if (triggerType === 'batch') {
-                        await this.dispatchBatchTrigger(run, hogFlow.trigger as Record<string, unknown>)
+                        await this.dispatchBatchTrigger(schedule, hogFlow)
                     } else {
                         await client.query(
-                            `UPDATE workflows_hogflowscheduledrun
-                             SET status = 'failed', completed_at = NOW(), updated_at = NOW(),
-                                 failure_reason = $2
-                             WHERE id = $1`,
-                            [run.id, `Unsupported trigger type: ${triggerType}`]
+                            `UPDATE workflows_hogflowschedule SET next_run_at = NULL, updated_at = NOW() WHERE id = $1`,
+                            [schedule.id]
                         )
                         continue
                     }
 
-                    // Mark as completed
-                    await client.query(
-                        `UPDATE workflows_hogflowscheduledrun
-                         SET status = 'completed', completed_at = NOW(), updated_at = NOW()
-                         WHERE id = $1`,
-                        [run.id]
+                    // Compute and set next_run_at
+                    const nextRunAt = this.computeNextOccurrence(
+                        schedule.rrule,
+                        new Date(schedule.starts_at),
+                        new Date(schedule.next_run_at),
+                        schedule.timezone
                     )
 
-                    // Create the next pending run from the schedule
-                    if (run.schedule_id) {
-                        await this.createNextPendingRun(client, run, hogFlow)
+                    if (nextRunAt) {
+                        await client.query(
+                            `UPDATE workflows_hogflowschedule SET next_run_at = $2, updated_at = NOW() WHERE id = $1`,
+                            [schedule.id, nextRunAt]
+                        )
+                    } else {
+                        // RRULE exhausted
+                        await client.query(
+                            `UPDATE workflows_hogflowschedule
+                             SET status = 'completed', next_run_at = NULL, updated_at = NOW()
+                             WHERE id = $1`,
+                            [schedule.id]
+                        )
                     }
                 } catch (err) {
-                    logger.error('HogFlowScheduleService: failed to process run', {
-                        runId: run.id,
+                    logger.error('HogFlowScheduleService: failed to process schedule', {
+                        scheduleId: schedule.id,
                         error: String(err),
                     })
+                    // Clear next_run_at to prevent retry loop, will be re-synced on next save
                     await client.query(
-                        `UPDATE workflows_hogflowscheduledrun
-                         SET status = 'failed', completed_at = NOW(), updated_at = NOW(),
-                             failure_reason = $2
-                         WHERE id = $1`,
-                        [run.id, String(err)]
+                        `UPDATE workflows_hogflowschedule SET next_run_at = NULL, updated_at = NOW() WHERE id = $1`,
+                        [schedule.id]
                     )
                 }
             }
@@ -155,75 +154,36 @@ export class HogFlowScheduleService {
         }
     }
 
-    private async dispatchBatchTrigger(run: DueRun, trigger: Record<string, unknown>): Promise<void> {
+    private async dispatchBatchTrigger(schedule: DueSchedule, hogFlow: HogFlowRow): Promise<void> {
         if (!this.kafkaProducer) {
             throw new Error('Kafka producer not available')
         }
 
-        const filters = trigger.filters as Record<string, unknown> | undefined
+        const filters = (hogFlow.trigger as Record<string, unknown>)?.filters as Record<string, unknown> | undefined
+        const resolvedVariables = this.resolveVariables(hogFlow.variables, schedule.variables)
 
         const batchHogFlowRequest = {
-            teamId: run.team_id,
-            hogFlowId: run.hog_flow_id,
+            teamId: schedule.team_id,
+            hogFlowId: schedule.hog_flow_id,
             parentRunId: null,
             filters: {
                 properties: (filters?.properties as unknown[]) || [],
                 filter_test_accounts: false,
             },
+            variables: resolvedVariables,
         }
 
         await this.kafkaProducer.produce({
             topic: KAFKA_CDP_BATCH_HOGFLOW_REQUESTS,
             value: Buffer.from(JSON.stringify(batchHogFlowRequest)),
-            key: `${run.team_id}_${run.hog_flow_id}`,
+            key: `${schedule.team_id}_${schedule.hog_flow_id}`,
         })
 
         logger.info('HogFlowScheduleService: dispatched batch trigger', {
-            runId: run.id,
-            hogFlowId: run.hog_flow_id,
-            teamId: run.team_id,
+            scheduleId: schedule.id,
+            hogFlowId: schedule.hog_flow_id,
+            teamId: schedule.team_id,
         })
-    }
-
-    private async createNextPendingRun(client: any, completedRun: DueRun, hogFlow: HogFlowRow): Promise<void> {
-        // Fetch the schedule that produced this run
-        const scheduleResult = await client.query<ScheduleRow>(
-            `SELECT id, rrule, starts_at, timezone, variables, status
-             FROM workflows_hogflowschedule
-             WHERE id = $1`,
-            [completedRun.schedule_id]
-        )
-
-        if (!scheduleResult.rows.length || scheduleResult.rows[0].status !== 'active') {
-            return
-        }
-
-        const schedule = scheduleResult.rows[0]
-        const nextRunAt = this.computeNextOccurrence(
-            schedule.rrule,
-            new Date(schedule.starts_at),
-            new Date(completedRun.run_at),
-            schedule.timezone
-        )
-
-        if (!nextRunAt) {
-            // RRULE exhausted, mark schedule as completed
-            await client.query(
-                `UPDATE workflows_hogflowschedule SET status = 'completed', updated_at = NOW() WHERE id = $1`,
-                [schedule.id]
-            )
-            return
-        }
-
-        // Resolve variables: HogFlow defaults merged with schedule overrides
-        const resolvedVariables = this.resolveVariables(hogFlow.variables, schedule.variables)
-
-        await client.query(
-            `INSERT INTO workflows_hogflowscheduledrun
-             (id, team_id, hog_flow_id, schedule_id, run_at, status, variables, created_at, updated_at)
-             VALUES (gen_random_uuid(), $1, $2, $3, $4, 'pending', $5, NOW(), NOW())`,
-            [completedRun.team_id, completedRun.hog_flow_id, schedule.id, nextRunAt, JSON.stringify(resolvedVariables)]
-        )
     }
 
     private resolveVariables(
@@ -231,8 +191,8 @@ export class HogFlowScheduleService {
         scheduleVariables: Record<string, unknown>
     ): Record<string, unknown> {
         const defaults: Record<string, unknown> = {}
-        for (const v of hogFlowVariables || []) {
-            defaults[v.key] = v.default ?? null
+        for (const variable of hogFlowVariables || []) {
+            defaults[variable.key] = variable.default ?? null
         }
         return { ...defaults, ...scheduleVariables }
     }
@@ -243,7 +203,6 @@ export class HogFlowScheduleService {
         after: Date,
         timezone: string = 'UTC'
     ): Date | null {
-        // Convert startsAt to the schedule's timezone for RRULE expansion
         const startsAtLocal = DateTime.fromJSDate(startsAt, { zone: 'utc' }).setZone(timezone)
         const dtstart = new Date(
             Date.UTC(
@@ -259,7 +218,6 @@ export class HogFlowScheduleService {
         const parsed = RRule.fromString(rruleStr)
         const rule = new RRule({ ...parsed.origOptions, dtstart })
 
-        // Convert after to the same "fake UTC" representation
         const afterLocal = DateTime.fromJSDate(after, { zone: 'utc' }).setZone(timezone)
         const afterFakeUtc = new Date(
             Date.UTC(
@@ -272,7 +230,6 @@ export class HogFlowScheduleService {
             )
         )
 
-        // Use between() which respects COUNT/UNTIL
         const upperBound = new Date(afterFakeUtc.getTime() + 365 * 24 * 60 * 60 * 1000 * 10)
         const occurrences = rule.between(afterFakeUtc, upperBound, false)
 
@@ -280,7 +237,6 @@ export class HogFlowScheduleService {
             return null
         }
 
-        // Convert back from "fake UTC" to actual UTC
         const next = occurrences[0]
         const localDt = DateTime.fromObject(
             {

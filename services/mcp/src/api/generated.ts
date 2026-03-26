@@ -4142,6 +4142,11 @@ export namespace Schemas {
       name?: string | null;
       query: string;
       response?: HogQLQueryResponse | null;
+      /**
+       * Run the selected connection query directly without translating it through HogQL first
+       * @nullable
+       */
+      sendRawQuery?: boolean | null;
       tags?: QueryLogTags | null;
       /**
        * Constant values that can be referenced with the {placeholder} syntax in the query
@@ -6994,24 +6999,6 @@ export namespace Schemas {
       label: string;
       value: string;
     }
-
-    /**
-     * * `won` - Won
-    * `lost` - Lost
-    * `inconclusive` - Inconclusive
-    * `stopped_early` - Stopped Early
-    * `invalid` - Invalid
-     */
-    export type ConclusionEnum = typeof ConclusionEnum[keyof typeof ConclusionEnum];
-
-
-    export const ConclusionEnum = {
-      Won: 'won',
-      Lost: 'lost',
-      Inconclusive: 'inconclusive',
-      StoppedEarly: 'stopped_early',
-      Invalid: 'invalid',
-    } as const;
 
     export interface ConditionalFormattingRule {
       bytecode: unknown[];
@@ -12398,6 +12385,40 @@ export namespace Schemas {
       design?: unknown;
     }
 
+    /**
+     * * `won` - won
+    * `lost` - lost
+    * `inconclusive` - inconclusive
+    * `stopped_early` - stopped_early
+    * `invalid` - invalid
+     */
+    export type EndExperimentConclusionEnum = typeof EndExperimentConclusionEnum[keyof typeof EndExperimentConclusionEnum];
+
+
+    export const EndExperimentConclusionEnum = {
+      Won: 'won',
+      Lost: 'lost',
+      Inconclusive: 'inconclusive',
+      StoppedEarly: 'stopped_early',
+      Invalid: 'invalid',
+    } as const;
+
+    export interface EndExperiment {
+      /** The conclusion of the experiment.
+
+    * `won` - won
+    * `lost` - lost
+    * `inconclusive` - inconclusive
+    * `stopped_early` - stopped_early
+    * `invalid` - invalid */
+      conclusion?: EndExperimentConclusionEnum | NullEnum | null;
+      /**
+       * Optional comment about the experiment conclusion.
+       * @nullable
+       */
+      conclusion_comment?: string | null;
+    }
+
     export interface EndpointLastExecutionTimesRequest {
       names: string[];
     }
@@ -13448,6 +13469,24 @@ export namespace Schemas {
     } as const;
 
     /**
+     * * `won` - Won
+    * `lost` - Lost
+    * `inconclusive` - Inconclusive
+    * `stopped_early` - Stopped Early
+    * `invalid` - Invalid
+     */
+    export type ExperimentConclusionEnum = typeof ExperimentConclusionEnum[keyof typeof ExperimentConclusionEnum];
+
+
+    export const ExperimentConclusionEnum = {
+      Won: 'won',
+      Lost: 'lost',
+      Inconclusive: 'inconclusive',
+      StoppedEarly: 'stopped_early',
+      Invalid: 'invalid',
+    } as const;
+
+    /**
      * * `draft` - Draft
     * `running` - Running
     * `stopped` - Stopped
@@ -13503,7 +13542,7 @@ export namespace Schemas {
       stats_config?: unknown | null;
       scheduling_config?: unknown | null;
       _create_in_folder?: string;
-      conclusion?: ConclusionEnum | BlankEnum | NullEnum | null;
+      conclusion?: ExperimentConclusionEnum | BlankEnum | NullEnum | null;
       /** @nullable */
       conclusion_comment?: string | null;
       primary_metrics_ordered_uuids?: unknown | null;
@@ -14210,11 +14249,14 @@ export namespace Schemas {
       FullRefresh: 'full_refresh',
       Incremental: 'incremental',
       Append: 'append',
+      Webhook: 'webhook',
     } as const;
 
     export interface ExternalDataSchema {
       readonly id: string;
       readonly name: string;
+      /** @nullable */
+      readonly label: string | null;
       /** @nullable */
       readonly table: ExternalDataSchemaTable;
       should_sync?: boolean;
@@ -15516,32 +15558,6 @@ export namespace Schemas {
       output_variable?: unknown | null;
     }
 
-    /**
-     * * `active` - Active
-    * `paused` - Paused
-    * `completed` - Completed
-     */
-    export type HogFlowScheduleStatusEnum = typeof HogFlowScheduleStatusEnum[keyof typeof HogFlowScheduleStatusEnum];
-
-
-    export const HogFlowScheduleStatusEnum = {
-      Active: 'active',
-      Paused: 'paused',
-      Completed: 'completed',
-    } as const;
-
-    export interface HogFlowSchedule {
-      id?: string;
-      rrule: string;
-      starts_at: string;
-      /** @maxLength 64 */
-      timezone?: string;
-      variables?: unknown;
-      readonly status: HogFlowScheduleStatusEnum;
-      readonly created_at: string;
-      readonly updated_at: string;
-    }
-
     export interface HogFlow {
       readonly id: string;
       /**
@@ -15565,7 +15581,6 @@ export namespace Schemas {
       readonly abort_action: string | null;
       variables?: HogFlowVariablesItem[];
       readonly billable_action_types: unknown | null;
-      schedules?: HogFlowSchedule[];
     }
 
     export interface HogFlowMinimal {
@@ -15588,39 +15603,34 @@ export namespace Schemas {
       readonly abort_action: string | null;
       readonly variables: unknown | null;
       readonly billable_action_types: unknown | null;
-      readonly schedules: readonly HogFlowSchedule[];
     }
 
     /**
-     * * `pending` - Pending
+     * * `active` - Active
+    * `paused` - Paused
     * `completed` - Completed
-    * `failed` - Failed
      */
-    export type HogFlowScheduledRunStatusEnum = typeof HogFlowScheduledRunStatusEnum[keyof typeof HogFlowScheduledRunStatusEnum];
+    export type HogFlowScheduleStatusEnum = typeof HogFlowScheduleStatusEnum[keyof typeof HogFlowScheduleStatusEnum];
 
 
-    export const HogFlowScheduledRunStatusEnum = {
-      Pending: 'pending',
+    export const HogFlowScheduleStatusEnum = {
+      Active: 'active',
+      Paused: 'paused',
       Completed: 'completed',
-      Failed: 'failed',
     } as const;
 
-    export interface HogFlowScheduledRun {
+    export interface HogFlowSchedule {
       readonly id: string;
-      readonly run_at: string;
-      readonly status: HogFlowScheduledRunStatusEnum;
+      rrule: string;
+      starts_at: string;
+      /** @maxLength 64 */
+      timezone?: string;
+      variables?: unknown;
+      readonly status: HogFlowScheduleStatusEnum;
       /** @nullable */
-      readonly schedule: string | null;
-      readonly variables: unknown;
-      /** @nullable */
-      readonly batch_job: string | null;
-      /** @nullable */
-      readonly started_at: string | null;
-      /** @nullable */
-      readonly completed_at: string | null;
-      /** @nullable */
-      readonly failure_reason: string | null;
+      readonly next_run_at: string | null;
       readonly created_at: string;
+      readonly updated_at: string;
     }
 
     /**
@@ -19175,13 +19185,13 @@ export namespace Schemas {
       results: HogFlowMinimal[];
     }
 
-    export interface PaginatedHogFlowScheduledRunList {
+    export interface PaginatedHogFlowScheduleList {
       count: number;
       /** @nullable */
       next?: string | null;
       /** @nullable */
       previous?: string | null;
-      results: HogFlowScheduledRun[];
+      results: HogFlowSchedule[];
     }
 
     export interface PaginatedHogFlowTemplateList {
@@ -22237,7 +22247,7 @@ export namespace Schemas {
       stats_config?: unknown | null;
       scheduling_config?: unknown | null;
       _create_in_folder?: string;
-      conclusion?: ConclusionEnum | BlankEnum | NullEnum | null;
+      conclusion?: ExperimentConclusionEnum | BlankEnum | NullEnum | null;
       /** @nullable */
       conclusion_comment?: string | null;
       primary_metrics_ordered_uuids?: unknown | null;
@@ -22298,6 +22308,8 @@ export namespace Schemas {
     export interface PatchedExternalDataSchema {
       readonly id?: string;
       readonly name?: string;
+      /** @nullable */
+      readonly label?: string | null;
       /** @nullable */
       readonly table?: PatchedExternalDataSchemaTable;
       should_sync?: boolean;
@@ -22525,7 +22537,6 @@ export namespace Schemas {
       readonly abort_action?: string | null;
       variables?: PatchedHogFlowVariablesItem[];
       readonly billable_action_types?: unknown | null;
-      schedules?: HogFlowSchedule[];
     }
 
     /**
@@ -29971,7 +29982,22 @@ export namespace Schemas {
     updated_at?: string;
     };
 
-    export type EnvironmentsHogFlowsScheduledRunsListParams = {
+    export type EnvironmentsHogFlowsSchedulesListParams = {
+    created_at?: string;
+    created_by?: number;
+    id?: string;
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number;
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number;
+    updated_at?: string;
+    };
+
+    export type EnvironmentsHogFlowsSchedulesCreateParams = {
     created_at?: string;
     created_by?: number;
     id?: string;
@@ -32827,7 +32853,22 @@ export namespace Schemas {
     updated_at?: string;
     };
 
-    export type HogFlowsScheduledRunsListParams = {
+    export type HogFlowsSchedulesListParams = {
+    created_at?: string;
+    created_by?: number;
+    id?: string;
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number;
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number;
+    updated_at?: string;
+    };
+
+    export type HogFlowsSchedulesCreateParams = {
     created_at?: string;
     created_by?: number;
     id?: string;
