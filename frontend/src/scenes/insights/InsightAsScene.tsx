@@ -82,44 +82,40 @@ export function InsightAsScene({ insightId, attachTo, tabId }: InsightAsScenePro
         return null
     }
 
-    const headerContent = (
-        <>
-            <InsightPageHeader insightLogicProps={insightProps} />
-
-            {hasOverrides && (
-                <LemonBanner type="warning" className="mb-4">
-                    <div className="flex flex-row items-center justify-between gap-2">
-                        <span>
-                            You are viewing this insight with filter/variable overrides. Discard them to edit the
-                            insight.
-                        </span>
-
-                        <LemonButton type="secondary" to={urls.insightView(insightId as InsightShortId)}>
-                            Discard overrides
-                        </LemonButton>
-                    </div>
-                </LemonBanner>
-            )}
-
-            {insightMode === ItemMode.Edit && <InsightsNav />}
-
-            {showDebugPanel && (
-                <div className="mb-4">
-                    <DebugCHQueries insightId={insightProps.cachedInsight?.id} />
-                </div>
-            )}
-
-            {freshQuery ? <ReloadInsight /> : null}
-        </>
-    )
-
-    const useSceneHeaderSlot = editorPanelsEnabled && insightMode === ItemMode.Edit
+    const fullHeightEdit = editorPanelsEnabled && insightMode === ItemMode.Edit
 
     return (
         <BindLogic logic={insightLogic} props={insightProps}>
             <InsightModals insightLogicProps={insightProps} />
-            <SceneContent className={clsx('Insight', useSceneHeaderSlot && '!p-0 !gap-0')}>
-                {!useSceneHeaderSlot && headerContent}
+            <SceneContent className={clsx('Insight', fullHeightEdit && '!p-0 !gap-0 h-[calc(100vh-3rem)]')}>
+                <div className={clsx(fullHeightEdit && 'px-4 pt-2 shrink-0')}>
+                    <InsightPageHeader insightLogicProps={insightProps} />
+
+                    {hasOverrides && (
+                        <LemonBanner type="warning" className="mb-4">
+                            <div className="flex flex-row items-center justify-between gap-2">
+                                <span>
+                                    You are viewing this insight with filter/variable overrides. Discard them to edit
+                                    the insight.
+                                </span>
+
+                                <LemonButton type="secondary" to={urls.insightView(insightId as InsightShortId)}>
+                                    Discard overrides
+                                </LemonButton>
+                            </div>
+                        </LemonBanner>
+                    )}
+
+                    {insightMode === ItemMode.Edit && <InsightsNav />}
+
+                    {showDebugPanel && (
+                        <div className="mb-4">
+                            <DebugCHQueries insightId={insightProps.cachedInsight?.id} />
+                        </div>
+                    )}
+
+                    {freshQuery ? <ReloadInsight /> : null}
+                </div>
 
                 <Query
                     attachTo={attachTo}
@@ -132,7 +128,6 @@ export function InsightAsScene({ insightId, attachTo, tabId }: InsightAsScenePro
                         showQueryEditor: actuallyShowQueryEditor,
                         showQueryHelp: insightMode === ItemMode.Edit && !containsHogQLQuery(query),
                         insightProps,
-                        sceneHeader: useSceneHeaderSlot ? headerContent : undefined,
                     }}
                     filtersOverride={filtersOverride}
                     variablesOverride={variablesOverride}

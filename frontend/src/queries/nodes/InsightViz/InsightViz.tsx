@@ -141,17 +141,11 @@ export function InsightViz({
                                               'InsightViz--horizontal':
                                                   editorPanelsEnabled || isFunnels || isRetention || isHorizontalAlways,
                                               '!gap-0': editorPanelsEnabled,
-                                              'flex-1 h-[calc(100vh-4rem)] -mt-4 -mx-4 -mb-4':
-                                                  editorPanelsEnabled && editMode,
+                                              'flex-1 min-h-0': editorPanelsEnabled && editMode,
                                           })
                                         : 'InsightCard__viz'
                                 }
                             >
-                                {editorPanelsEnabled && context?.sceneHeader && (
-                                    <div className="w-full shrink-0 px-4 pt-2 [&_.-mt-4]:mt-0 z-10 relative">
-                                        {context.sceneHeader}
-                                    </div>
-                                )}
                                 {editorPanelsEnabled ? (
                                     <EditorFilters
                                         query={query.source}
@@ -167,19 +161,7 @@ export function InsightViz({
                                         />
                                     )
                                 )}
-                                {!isEmbedded ? (
-                                    editorPanelsEnabled && context?.sceneHeader ? (
-                                        <div className="flex-1 min-w-0 h-full flex flex-col">
-                                            <div className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden pt-2 px-4 pb-4">
-                                                {display}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 h-full overflow-auto">{display}</div>
-                                    )
-                                ) : (
-                                    display
-                                )}
+                                {!isEmbedded ? <div className="flex-1 h-full overflow-auto">{display}</div> : display}
                             </div>
                         </BindLogic>
                     </BindLogic>
