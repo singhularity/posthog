@@ -1,9 +1,9 @@
-import { useValues } from 'kea'
-import { PropsWithChildren } from 'react'
+import { useActions, useValues } from 'kea'
+import { PropsWithChildren, useCallback } from 'react'
 import { match } from 'ts-pattern'
 
-import { IconChevronRight, IconTrending } from '@posthog/icons'
-import { LemonSkeleton, Tooltip } from '@posthog/lemon-ui'
+import { IconChevronRight, IconTrending, IconX } from '@posthog/icons'
+import { LemonButton, LemonSkeleton, Tooltip } from '@posthog/lemon-ui'
 
 import { dayjs } from 'lib/dayjs'
 import { humanFriendlyLargeNumber } from 'lib/utils'
@@ -20,12 +20,23 @@ import type { SparklineDatum, SparklineEvent, VolumeSparklineHoverSelection } fr
 import { VolumeSparkline } from './VolumeSparkline/VolumeSparkline'
 
 export const Metadata = ({ children, className }: PropsWithChildren<{ className?: string }>): JSX.Element => {
-    const { aggregations, summaryLoading, issueLoading, firstSeen, lastSeen, issueId } =
+    const { aggregations, summaryLoading, issueLoading, firstSeen, lastSeen, issueId, chartSelectedDateRange } =
         useValues(errorTrackingIssueSceneLogic)
+    const { setChartSelectedDateRange, clearChartSelectedDateRange } = useActions(errorTrackingIssueSceneLogic)
     const sparklineKey = issueId || 'issue-unknown'
     const { hoverSelection } = useValues(errorTrackingVolumeSparklineLogic({ sparklineKey }))
     const sparklineData = useSparklineDataIssueScene()
     const sparklineEvents = useSparklineEvents()
+
+    const handleRangeSelect = useCallback(
+        (startDate: Date, endDate: Date) => {
+            setChartSelectedDateRange({
+                date_from: startDate.toISOString(),
+                date_to: endDate.toISOString(),
+            })
+        },
+        [setChartSelectedDateRange]
+    )
 
     return (
         <div className={className}>
@@ -44,29 +55,36 @@ export const Metadata = ({ children, className }: PropsWithChildren<{ className?
                     {match(hoverSelection)
                         .when(
                             (data) => shouldRenderIssueMetrics(data),
-                            () => (
-                                <>
-                                    <TimeBoundary
-                                        time={firstSeen}
-                                        loading={issueLoading}
-                                        label="First Seen"
-                                        updateDateRange={(dateRange) => {
-                                            dateRange.date_from = firstSeen?.toISOString()
-                                            return dateRange
-                                        }}
+                            () =>
+                                chartSelectedDateRange ? (
+                                    <ChartSelectionIndicator
+                                        dateFrom={chartSelectedDateRange.date_from!}
+                                        dateTo={chartSelectedDateRange.date_to!}
+                                        onClear={clearChartSelectedDateRange}
                                     />
-                                    <IconChevronRight />
-                                    <TimeBoundary
-                                        time={lastSeen}
-                                        loading={summaryLoading}
-                                        label="Last Seen"
-                                        updateDateRange={(dateRange) => {
-                                            dateRange.date_to = lastSeen?.endOf('minute').toISOString()
-                                            return dateRange
-                                        }}
-                                    />
-                                </>
-                            )
+                                ) : (
+                                    <>
+                                        <TimeBoundary
+                                            time={firstSeen}
+                                            loading={issueLoading}
+                                            label="First Seen"
+                                            updateDateRange={(dateRange) => {
+                                                dateRange.date_from = firstSeen?.toISOString()
+                                                return dateRange
+                                            }}
+                                        />
+                                        <IconChevronRight />
+                                        <TimeBoundary
+                                            time={lastSeen}
+                                            loading={summaryLoading}
+                                            label="Last Seen"
+                                            updateDateRange={(dateRange) => {
+                                                dateRange.date_to = lastSeen?.endOf('minute').toISOString()
+                                                return dateRange
+                                            }}
+                                        />
+                                    </>
+                                )
                         )
                         .with({ kind: 'bin' }, (data) => renderDate(data.datum.date))
                         .with({ kind: 'event' }, (data) => renderDate(data.event.date))
@@ -81,6 +99,7 @@ export const Metadata = ({ children, className }: PropsWithChildren<{ className?
                     events={sparklineEvents}
                     sparklineKey={sparklineKey}
                     className="h-full min-h-[160px]"
+                    onRangeSelect={handleRangeSelect}
                 />
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
@@ -124,7 +143,7 @@ function renderMetric(name: string, value: number | undefined, loading: boolean,
     return (
         <>
             {match([loading])
-                .with([true], () => <LemonSkeleton className="w-[80px] h-2" />)
+                .with([true], () => <LemonSkeleton className="w-[50px] h-2" />)
                 .with([false], () => (
                     <Tooltip title={tooltip} delayMs={0} placement="right">
                         <div className="flex items-center gap-1">
@@ -164,6 +183,36 @@ function renderEventPoint(d: SparklineEvent<string>): JSX.Element {
     return (
         <div className="flex justify-start items-center h-full gap-1">
             <div className="text-lg font-bold">{d.payload}</div>
+        </div>
+    )
+}
+
+function ChartSelectionIndicator({
+    dateFrom,
+    dateTo,
+    onClear,
+}: {
+    dateFrom: string
+    dateTo: string
+    onClear: () => void
+}): JSX.Element {
+    const from = dayjs(dateFrom)
+    const to = dayjs(dateTo)
+    const sameDay = from.isSame(to, 'day')
+    const format = sameDay ? 'MMM D, HH:mm' : 'MMM D, HH:mm'
+    const fromStr = from.utc().format(format)
+    const toStr = to.utc().format(sameDay ? 'HH:mm' : format)
+
+    return (
+        <div className="flex items-center gap-1.5 rounded-full bg-primary-highlight px-2.5 py-0.5">
+            <span className="text-xs whitespace-nowrap">
+                <span className="text-muted">Selected:</span>{' '}
+                <span className="font-medium">
+                    {fromStr} – {toStr}
+                </span>
+                {sameDay && <span className="text-muted"> (UTC)</span>}
+            </span>
+            <LemonButton size="xsmall" noPadding icon={<IconX className="text-xs" />} onClick={onClear} />
         </div>
     )
 }

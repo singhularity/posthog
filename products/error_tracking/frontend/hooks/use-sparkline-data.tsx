@@ -64,8 +64,8 @@ export function useSparklineData(
 }
 
 export function useSparklineDataIssueScene(): SparklineData {
-    const { aggregations, dateRange, spikeEvents } = useValues(errorTrackingIssueSceneLogic)
-    const data = useSparklineData(aggregations, ERROR_TRACKING_DETAILS_RESOLUTION, dateRange)
+    const { aggregations, effectiveDateRange, spikeEvents } = useValues(errorTrackingIssueSceneLogic)
+    const data = useSparklineData(aggregations, ERROR_TRACKING_DETAILS_RESOLUTION, effectiveDateRange)
     return useMemo(() => applyVolumeSpikeHighlights(data, spikeEvents), [data, spikeEvents])
 }
 

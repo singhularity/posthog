@@ -104,6 +104,8 @@ export const errorTrackingIssueSceneLogic = kea<errorTrackingIssueSceneLogicType
         updateName: (name: string) => ({ name }),
         updateDescription: (description: string) => ({ description }),
         setSimilarIssuesMaxDistance: (distance: number) => ({ distance }),
+        setChartSelectedDateRange: (dateRange: DateRange) => ({ dateRange }),
+        clearChartSelectedDateRange: true,
     }),
 
     defaults({
@@ -117,6 +119,7 @@ export const errorTrackingIssueSceneLogic = kea<errorTrackingIssueSceneLogicType
         initialEventLoading: true as boolean,
         similarIssuesMaxDistance: 0.2 as number,
         similarIssuesError: null as string | null,
+        chartSelectedDateRange: null as DateRange | null,
     }),
 
     reducers(({ values }) => ({
@@ -153,6 +156,11 @@ export const errorTrackingIssueSceneLogic = kea<errorTrackingIssueSceneLogicType
                 }
                 return event
             },
+        },
+        chartSelectedDateRange: {
+            setChartSelectedDateRange: (_, { dateRange }) => dateRange,
+            clearChartSelectedDateRange: () => null,
+            setDateRange: () => null,
         },
     })),
 
@@ -236,7 +244,7 @@ export const errorTrackingIssueSceneLogic = kea<errorTrackingIssueSceneLogicType
                 const response = await api.query(
                     errorTrackingIssueQuery({
                         issueId: props.id,
-                        dateRange: values.dateRange,
+                        dateRange: values.effectiveDateRange,
                         filterTestAccounts: values.filterTestAccounts,
                         filterGroup: values.filterGroup,
                         searchQuery: values.searchQuery,
@@ -287,7 +295,7 @@ export const errorTrackingIssueSceneLogic = kea<errorTrackingIssueSceneLogicType
             [] as ErrorTrackingSpikeEvent[],
             {
                 loadSpikeEvents: async () => {
-                    const { dateFrom, dateTo } = dateRangeToIsoBounds(values.dateRange)
+                    const { dateFrom, dateTo } = dateRangeToIsoBounds(values.effectiveDateRange)
                     const response = await api.errorTracking.getSpikeEvents({
                         issueIds: [props.id],
                         dateFrom,
@@ -356,15 +364,20 @@ export const errorTrackingIssueSceneLogic = kea<errorTrackingIssueSceneLogicType
 
         aggregations: [(s) => [s.summary], (summary: ErrorTrackingIssueSummary | null) => summary?.aggregations],
 
+        effectiveDateRange: [
+            (s) => [s.chartSelectedDateRange, s.dateRange],
+            (chartSelected: DateRange | null, master: DateRange): DateRange => chartSelected ?? master,
+        ],
+
         eventsQuery: [
-            (s) => [s.issueFingerprints, s.filterTestAccounts, s.searchQuery, s.filterGroup, s.dateRange],
-            (issueFingerprints, filterTestAccounts, searchQuery, filterGroup, dateRange) =>
+            (s) => [s.issueFingerprints, s.filterTestAccounts, s.searchQuery, s.filterGroup, s.effectiveDateRange],
+            (issueFingerprints, filterTestAccounts, searchQuery, filterGroup, effectiveDateRange) =>
                 errorTrackingIssueEventsQuery({
                     fingerprints: issueFingerprints.map((f: ErrorTrackingFingerprint) => f.fingerprint),
                     filterTestAccounts,
                     filterGroup,
                     searchQuery,
-                    dateRange,
+                    dateRange: effectiveDateRange,
                     columns: ['*', 'timestamp', 'person'],
                 }),
         ],
@@ -403,6 +416,14 @@ export const errorTrackingIssueSceneLogic = kea<errorTrackingIssueSceneLogicType
     listeners(({ props, values, actions }) => {
         return {
             setDateRange: () => {
+                actions.loadSummary()
+                actions.loadSpikeEvents()
+            },
+            setChartSelectedDateRange: () => {
+                actions.loadSummary()
+                actions.loadSpikeEvents()
+            },
+            clearChartSelectedDateRange: () => {
                 actions.loadSummary()
                 actions.loadSpikeEvents()
             },
