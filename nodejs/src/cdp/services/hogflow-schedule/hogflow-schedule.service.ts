@@ -123,7 +123,7 @@ export class HogFlowScheduleService {
             parentRunId: null,
             filters: {
                 properties: (schedule.filters?.properties as unknown[]) || [],
-                filter_test_accounts: false,
+                filter_test_accounts: (schedule.filters?.filter_test_accounts as boolean) ?? false,
             },
             variables: schedule.variables,
         }

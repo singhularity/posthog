@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { RRule, Frequency } from 'rrule'
 
 import { IconCalendar } from '@posthog/icons'
 import {
@@ -13,6 +12,20 @@ import {
 
 import { dayjs } from 'lib/dayjs'
 
+import {
+    buildSummary,
+    computePreviewOccurrences,
+    DEFAULT_STATE,
+    FREQUENCY_OPTIONS,
+    getNthWeekdayOfMonth,
+    NTH_LABELS,
+    parseRRuleToState,
+    stateToRRule,
+    WEEKDAY_FULL_LABELS,
+    WEEKDAY_PILL_LABELS,
+} from './rrule-helpers'
+import type { ScheduleState } from './rrule-helpers'
+
 type ScheduleConfig = {
     rrule: string
     starts_at: string
@@ -22,239 +35,6 @@ type ScheduleConfig = {
 interface RecurringSchedulePickerProps {
     schedule?: ScheduleConfig | null
     onChange: (schedule: ScheduleConfig | null) => void
-}
-
-type FrequencyOption = 'daily' | 'weekly' | 'monthly' | 'yearly'
-type MonthlyMode = 'day_of_month' | 'nth_weekday' | 'last_day'
-type EndType = 'never' | 'on_date' | 'after_count'
-
-const FREQUENCY_OPTIONS: { value: FrequencyOption; label: string }[] = [
-    { value: 'daily', label: 'Day' },
-    { value: 'weekly', label: 'Week' },
-    { value: 'monthly', label: 'Month' },
-    { value: 'yearly', label: 'Year' },
-]
-
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
-const WEEKDAY_PILL_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const
-const WEEKDAY_RRULE_DAYS = [RRule.MO, RRule.TU, RRule.WE, RRule.TH, RRule.FR, RRule.SA, RRule.SU]
-const WEEKDAY_FULL_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
-const NTH_LABELS = ['1st', '2nd', '3rd', '4th', '5th']
-
-interface ScheduleState {
-    interval: number
-    frequency: FrequencyOption
-    weekdays: number[] // 0=Mon, 6=Sun
-    monthlyMode: MonthlyMode
-    endType: EndType
-    endDate: string | null
-    endCount: number
-}
-
-const DEFAULT_STATE: ScheduleState = {
-    interval: 1,
-    frequency: 'weekly',
-    weekdays: [],
-    monthlyMode: 'day_of_month',
-    endType: 'never',
-    endDate: null,
-    endCount: 10,
-}
-
-function frequencyToRRule(freq: FrequencyOption): Frequency {
-    switch (freq) {
-        case 'daily':
-            return RRule.DAILY
-        case 'weekly':
-            return RRule.WEEKLY
-        case 'monthly':
-            return RRule.MONTHLY
-        case 'yearly':
-            return RRule.YEARLY
-    }
-}
-
-/** Get the Nth weekday occurrence for a date. E.g., March 14 2026 = 2nd Saturday → { n: 2, weekday: 5 } */
-function getNthWeekdayOfMonth(date: dayjs.Dayjs): { n: number; weekday: number } {
-    const dayOfMonth = date.date()
-    const weekday = (date.day() + 6) % 7 // Convert Sunday=0 to Monday=0 based
-    const n = Math.ceil(dayOfMonth / 7)
-    return { n, weekday }
-}
-
-function parseRRuleToState(rruleStr: string): ScheduleState {
-    try {
-        const rule = RRule.fromString(rruleStr)
-        const opts = rule.options
-
-        let frequency: FrequencyOption = 'weekly'
-        switch (opts.freq) {
-            case RRule.DAILY:
-                frequency = 'daily'
-                break
-            case RRule.WEEKLY:
-                frequency = 'weekly'
-                break
-            case RRule.MONTHLY:
-                frequency = 'monthly'
-                break
-            case RRule.YEARLY:
-                frequency = 'yearly'
-                break
-        }
-
-        const weekdays = opts.byweekday ? opts.byweekday.map((d: number) => d) : []
-
-        // Detect monthly mode
-        let monthlyMode: MonthlyMode = 'day_of_month'
-        if (frequency === 'monthly') {
-            if (opts.bymonthday && opts.bymonthday.includes(-1)) {
-                monthlyMode = 'last_day'
-            } else if (opts.bysetpos && opts.bysetpos.length > 0) {
-                monthlyMode = 'nth_weekday'
-            }
-        }
-
-        let endType: EndType = 'never'
-        let endDate: string | null = null
-        let endCount = 10
-
-        if (opts.until) {
-            endType = 'on_date'
-            endDate = dayjs(opts.until).toISOString()
-        } else if (opts.count) {
-            endType = 'after_count'
-            endCount = opts.count
-        }
-
-        return { interval: opts.interval || 1, frequency, weekdays, monthlyMode, endType, endDate, endCount }
-    } catch {
-        return { ...DEFAULT_STATE }
-    }
-}
-
-function stateToRRule(state: ScheduleState, startsAt: string | null): string {
-    const options: Partial<ConstructorParameters<typeof RRule>[0]> = {
-        freq: frequencyToRRule(state.frequency),
-        interval: state.interval,
-    }
-
-    if (state.frequency === 'weekly' && state.weekdays.length > 0) {
-        options.byweekday = state.weekdays.map((d) => WEEKDAY_RRULE_DAYS[d])
-    }
-
-    if (state.frequency === 'monthly' && startsAt) {
-        const date = dayjs(startsAt)
-        if (state.monthlyMode === 'last_day') {
-            options.bymonthday = [-1]
-        } else if (state.monthlyMode === 'day_of_month') {
-            options.bymonthday = [date.date()]
-        } else {
-            const { n, weekday } = getNthWeekdayOfMonth(date)
-            options.byweekday = [WEEKDAY_RRULE_DAYS[weekday]]
-            options.bysetpos = [n]
-        }
-    }
-
-    if (state.endType === 'on_date' && state.endDate) {
-        // Parse as calendar date and set to end of day in UTC,
-        // so occurrences on the selected end date are always included
-        const d = dayjs(state.endDate)
-        options.until = new Date(Date.UTC(d.year(), d.month(), d.date(), 23, 59, 59, 999))
-    } else if (state.endType === 'after_count') {
-        options.count = state.endCount
-    }
-
-    const rule = new RRule(options as ConstructorParameters<typeof RRule>[0])
-    return rule.toString().replace('RRULE:', '')
-}
-
-function computePreviewOccurrences(state: ScheduleState, startsAt: string, count?: number): Date[] {
-    // For finite schedules, compute all occurrences so we can show the last one
-    const maxCount =
-        count ??
-        (state.endType === 'after_count' ? Math.min(state.endCount, 200) : state.endType === 'on_date' ? 200 : 6)
-    try {
-        // Build the RRule directly from state rather than re-parsing from string,
-        // because fromString() can lose negative values like BYMONTHDAY=-1
-        // Feed rrule.js the local time components as UTC so all occurrences
-        // stay at the same local time (e.g. "7:00 AM" stays "7:00 AM" across DST).
-        // The server does proper timezone-aware expansion for actual execution.
-        const local = dayjs(startsAt)
-        const dtstartLocal = new Date(
-            Date.UTC(local.year(), local.month(), local.date(), local.hour(), local.minute(), 0)
-        )
-        const options: Partial<ConstructorParameters<typeof RRule>[0]> = {
-            freq: frequencyToRRule(state.frequency),
-            interval: state.interval,
-            dtstart: dtstartLocal,
-        }
-
-        if (state.frequency === 'weekly' && state.weekdays.length > 0) {
-            options.byweekday = state.weekdays.map((d) => WEEKDAY_RRULE_DAYS[d])
-        }
-
-        if (state.frequency === 'monthly') {
-            const date = dayjs(startsAt)
-            if (state.monthlyMode === 'last_day') {
-                options.bymonthday = [-1]
-            } else if (state.monthlyMode === 'day_of_month') {
-                options.bymonthday = [date.date()]
-            } else {
-                const { n, weekday } = getNthWeekdayOfMonth(date)
-                options.byweekday = [WEEKDAY_RRULE_DAYS[weekday]]
-                options.bysetpos = [n]
-            }
-        }
-
-        if (state.endType === 'on_date' && state.endDate) {
-            const d = dayjs(state.endDate)
-            options.until = new Date(Date.UTC(d.year(), d.month(), d.date(), 23, 59, 59, 999))
-        } else if (state.endType === 'after_count') {
-            options.count = state.endCount
-        }
-
-        const fullRule = new RRule(options as ConstructorParameters<typeof RRule>[0])
-        return fullRule.all((_, i) => i < maxCount)
-    } catch {
-        return []
-    }
-}
-
-function buildSummary(state: ScheduleState, startsAt: string | null): string {
-    const freqLabel = state.frequency === 'daily' ? 'day' : state.frequency.replace('ly', '')
-    const intervalStr = state.interval > 1 ? `${state.interval} ${freqLabel}s` : freqLabel
-
-    let summary = `Runs every ${intervalStr}`
-
-    if (state.frequency === 'weekly' && state.weekdays.length > 0) {
-        const dayNames = state.weekdays.map((d) => WEEKDAY_FULL_LABELS[d])
-        summary += ` on ${dayNames.join(', ')}`
-    }
-
-    if (state.frequency === 'monthly') {
-        if (state.monthlyMode === 'last_day') {
-            summary += ` on the last day`
-        } else if (state.monthlyMode === 'day_of_month' && startsAt) {
-            summary += ` on the ${dayjs(startsAt).format('Do')}`
-        } else if (state.monthlyMode === 'nth_weekday' && startsAt) {
-            const { n, weekday } = getNthWeekdayOfMonth(dayjs(startsAt))
-            summary += ` on the ${NTH_LABELS[n - 1]} ${WEEKDAY_FULL_LABELS[weekday]}`
-        }
-    }
-
-    if (startsAt) {
-        summary += `, starting ${dayjs(startsAt).format('MMMM D')}`
-    }
-
-    if (state.endType === 'after_count') {
-        summary += `, ${state.endCount} times`
-    } else if (state.endType === 'on_date' && state.endDate) {
-        summary += `, until ${dayjs(state.endDate).format('MMMM D, YYYY')}`
-    }
-
-    return summary + '.'
 }
 
 const VISIBLE_HEAD = 4
