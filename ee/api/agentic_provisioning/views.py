@@ -24,9 +24,15 @@ from rest_framework.response import Response
 from posthog.exceptions_capture import capture_exception
 from posthog.models.integration import StripeIntegration
 from posthog.models.oauth import OAuthAccessToken, OAuthRefreshToken, find_oauth_refresh_token
+from posthog.models.personal_api_key import PersonalAPIKey, hash_key_value
 from posthog.models.team.team import Team
 from posthog.models.user import User
-from posthog.models.utils import generate_random_oauth_access_token, generate_random_oauth_refresh_token
+from posthog.models.utils import (
+    generate_random_oauth_access_token,
+    generate_random_oauth_refresh_token,
+    generate_random_token_personal,
+    mask_key_value,
+)
 from posthog.utils import get_instance_region
 
 from . import AUTH_CODE_CACHE_PREFIX, PENDING_AUTH_CACHE_PREFIX, RESOURCE_SERVICE_CACHE_PREFIX
@@ -45,6 +51,7 @@ DEEP_LINK_RATE_LIMIT_MAX_ATTEMPTS = 10
 DEEP_LINK_RATE_LIMIT_WINDOW_SECONDS = 300
 
 STRIPE_APP_NAME = "PostHog Stripe App"
+STRIPE_PROVISIONED_PAT_LABEL_PREFIX = "Stripe Projects"
 
 ACCESS_TOKEN_EXPIRY_SECONDS = 365 * 24 * 3600
 
@@ -491,6 +498,25 @@ def _exchange_refresh_token(request: Request) -> Response:
     )
 
 
+def _create_provisioned_pat(user: User, team: Team) -> str:
+    """Create a Personal API Key for a Stripe-provisioned user and return the raw key value."""
+    api_key_value = generate_random_token_personal()
+
+    timestamp = timezone.now().strftime("%Y-%m-%d %H:%M")
+    max_team_name_len = 40 - len(f"{STRIPE_PROVISIONED_PAT_LABEL_PREFIX} - ") - len(f" - {timestamp}")
+    team_name = team.name[:max_team_name_len] if len(team.name) > max_team_name_len else team.name
+    label = f"{STRIPE_PROVISIONED_PAT_LABEL_PREFIX} - {team_name} - {timestamp}"
+
+    PersonalAPIKey.objects.create(
+        user=user,
+        label=label,
+        secure_value=hash_key_value(api_key_value),
+        mask_value=mask_key_value(api_key_value),
+    )
+
+    return api_key_value
+
+
 # ---------------------------------------------------------------------------
 # POST /provisioning/resources
 # ---------------------------------------------------------------------------
@@ -531,6 +557,8 @@ def provisioning_resources_create(request: Request) -> Response:
     region = get_instance_region() or "US"
     host = _region_to_host(region)
 
+    personal_api_key = _create_provisioned_pat(user, team)
+
     return Response(
         {
             "status": "complete",
@@ -539,6 +567,7 @@ def provisioning_resources_create(request: Request) -> Response:
             "complete": {
                 "access_configuration": {
                     "api_key": team.api_token,
+                    "personal_api_key": personal_api_key,
                     "host": host,
                 },
             },
@@ -602,6 +631,12 @@ def provisioning_rotate_credentials(request: Request, resource_id: str) -> Respo
             "credential_rotation_failed", "Failed to rotate credentials", resource_id=resource_id, status=500
         )
 
+    PersonalAPIKey.objects.filter(
+        user=user,
+        label__startswith=STRIPE_PROVISIONED_PAT_LABEL_PREFIX,
+    ).delete()
+    personal_api_key = _create_provisioned_pat(user, team)
+
     service_id = cache.get(f"{RESOURCE_SERVICE_CACHE_PREFIX}{team_id}") or POSTHOG_SERVICE_ID
     region = get_instance_region() or "US"
     host = _region_to_host(region)
@@ -614,6 +649,7 @@ def provisioning_rotate_credentials(request: Request, resource_id: str) -> Respo
             "complete": {
                 "access_configuration": {
                     "api_key": team.api_token,
+                    "personal_api_key": personal_api_key,
                     "host": host,
                 },
             },
