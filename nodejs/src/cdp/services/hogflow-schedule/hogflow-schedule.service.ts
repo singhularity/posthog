@@ -85,8 +85,15 @@ export class HogFlowScheduleService {
             }
 
             for (const schedule of data.processed) {
-                if (schedule.trigger_type === 'batch') {
-                    await this.dispatchBatchTrigger(schedule)
+                try {
+                    if (schedule.trigger_type === 'batch') {
+                        await this.dispatchBatchTrigger(schedule)
+                    }
+                } catch (err) {
+                    logger.error('HogFlowScheduleService: failed to dispatch schedule', {
+                        scheduleId: schedule.schedule_id,
+                        error: String(err),
+                    })
                 }
             }
 

@@ -698,46 +698,49 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                 )
 
                 for schedule in due_schedules:
-                    hog_flow = schedule.hog_flow
-                    trigger_type = (hog_flow.trigger or {}).get("type")
+                    try:
+                        hog_flow = schedule.hog_flow
+                        trigger_type = (hog_flow.trigger or {}).get("type")
 
-                    if hog_flow.status != "active" or trigger_type != "batch":
-                        schedule.next_run_at = None
-                        schedule.save(update_fields=["next_run_at", "updated_at"])
-                        continue
+                        if hog_flow.status != "active" or trigger_type != "batch":
+                            schedule.next_run_at = None
+                            schedule.save(update_fields=["next_run_at", "updated_at"])
+                            continue
 
-                    # Resolve variables
-                    variables = {}
-                    for var in hog_flow.variables or []:
-                        variables[var.get("key")] = var.get("default")
-                    variables.update(schedule.variables or {})
+                        # Resolve variables
+                        variables = {}
+                        for var in hog_flow.variables or []:
+                            variables[var.get("key")] = var.get("default")
+                        variables.update(schedule.variables or {})
 
-                    processed.append(
-                        {
-                            "schedule_id": str(schedule.id),
-                            "team_id": schedule.team_id,
-                            "hog_flow_id": str(schedule.hog_flow_id),
-                            "trigger_type": trigger_type,
-                            "filters": (hog_flow.trigger or {}).get("filters", {}),
-                            "variables": variables,
-                        }
-                    )
+                        processed.append(
+                            {
+                                "schedule_id": str(schedule.id),
+                                "team_id": schedule.team_id,
+                                "hog_flow_id": str(schedule.hog_flow_id),
+                                "trigger_type": trigger_type,
+                                "filters": (hog_flow.trigger or {}).get("filters", {}),
+                                "variables": variables,
+                            }
+                        )
 
-                    # Advance next_run_at
-                    occurrences = compute_next_occurrences(
-                        rrule_string=schedule.rrule,
-                        starts_at=schedule.starts_at,
-                        timezone_str=schedule.timezone,
-                        after=schedule.next_run_at,
-                        count=1,
-                    )
-                    if occurrences:
-                        schedule.next_run_at = occurrences[0]
-                        schedule.save(update_fields=["next_run_at", "updated_at"])
-                    else:
-                        schedule.status = HogFlowSchedule.Status.COMPLETED
-                        schedule.next_run_at = None
-                        schedule.save(update_fields=["status", "next_run_at", "updated_at"])
+                        # Advance next_run_at
+                        occurrences = compute_next_occurrences(
+                            rrule_string=schedule.rrule,
+                            starts_at=schedule.starts_at,
+                            timezone_str=schedule.timezone,
+                            after=schedule.next_run_at,
+                            count=1,
+                        )
+                        if occurrences:
+                            schedule.next_run_at = occurrences[0]
+                            schedule.save(update_fields=["next_run_at", "updated_at"])
+                        else:
+                            schedule.status = HogFlowSchedule.Status.COMPLETED
+                            schedule.next_run_at = None
+                            schedule.save(update_fields=["status", "next_run_at", "updated_at"])
+                    except Exception:
+                        logger.exception("Error processing schedule", schedule_id=str(schedule.id))
 
             # 2. Initialize next_run_at for schedules that need it
             with transaction.atomic():
@@ -748,20 +751,23 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                 )
 
                 for schedule in uninitialized:
-                    occurrences = compute_next_occurrences(
-                        rrule_string=schedule.rrule,
-                        starts_at=schedule.starts_at,
-                        timezone_str=schedule.timezone,
-                        count=1,
-                    )
-                    if occurrences:
-                        schedule.next_run_at = occurrences[0]
-                        schedule.save(update_fields=["next_run_at", "updated_at"])
-                        initialized.append(str(schedule.id))
-                    else:
-                        schedule.status = HogFlowSchedule.Status.COMPLETED
-                        schedule.next_run_at = None
-                        schedule.save(update_fields=["status", "next_run_at", "updated_at"])
+                    try:
+                        occurrences = compute_next_occurrences(
+                            rrule_string=schedule.rrule,
+                            starts_at=schedule.starts_at,
+                            timezone_str=schedule.timezone,
+                            count=1,
+                        )
+                        if occurrences:
+                            schedule.next_run_at = occurrences[0]
+                            schedule.save(update_fields=["next_run_at", "updated_at"])
+                            initialized.append(str(schedule.id))
+                        else:
+                            schedule.status = HogFlowSchedule.Status.COMPLETED
+                            schedule.next_run_at = None
+                            schedule.save(update_fields=["status", "next_run_at", "updated_at"])
+                    except Exception:
+                        logger.exception("Error initializing schedule", schedule_id=str(schedule.id))
 
             return Response(
                 {
