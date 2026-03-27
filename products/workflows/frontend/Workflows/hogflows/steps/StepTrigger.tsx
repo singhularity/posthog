@@ -631,6 +631,7 @@ function StepTriggerConfigurationBatch({
                     <LemonDivider />
                     <div className="flex items-center gap-2">
                         <LemonLabel>Schedule</LemonLabel>
+                        {saveStatus === 'unsaved' && <span className="text-xs text-warning">Unsaved</span>}
                         {saveStatus === 'saving' && <span className="text-xs text-muted">Saving...</span>}
                         {saveStatus === 'saved' && <span className="text-xs text-success">Saved</span>}
                         {saveStatus === 'error' && <span className="text-xs text-danger">Error saving</span>}

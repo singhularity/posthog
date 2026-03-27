@@ -65,17 +65,6 @@ export const scheduleLogic = kea<scheduleLogicType>([
                 loadSchedulesSuccess: () => undefined,
             },
         ],
-        debounceTimer: [
-            null as ReturnType<typeof setTimeout> | null,
-            {
-                debouncedSave: (state) => {
-                    if (state) {
-                        clearTimeout(state)
-                    }
-                    return null
-                },
-            },
-        ],
     }),
 
     selectors({
