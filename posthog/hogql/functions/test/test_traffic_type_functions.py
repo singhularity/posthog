@@ -132,6 +132,7 @@ class TestIsBotFunction:
         user_agent_arg = ast.Field(chain=["properties", "$user_agent"])
 
         result = is_bot(node=node, args=[user_agent_arg])
+        assert isinstance(result, ast.CompareOperation)
         assert isinstance(result.right, ast.Constant)
         assert result.right.value == 0
 

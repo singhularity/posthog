@@ -71,16 +71,19 @@ class TestIsBotField:
 
     def test_uses_multiMatchAnyIndex(self):
         field = create_is_bot_field(name="$virt_is_bot")
+        assert isinstance(field.expr, ast.CompareOperation)
         assert isinstance(field.expr.left, ast.Call)
         assert field.expr.left.name == "multiMatchAnyIndex"
 
     def test_compares_against_zero(self):
         field = create_is_bot_field(name="$virt_is_bot")
+        assert isinstance(field.expr, ast.CompareOperation)
         assert isinstance(field.expr.right, ast.Constant)
         assert field.expr.right.value == 0
 
     def test_wraps_user_agent_in_ifnull(self):
         field = create_is_bot_field(name="$virt_is_bot")
+        assert isinstance(field.expr, ast.CompareOperation)
         index_call = field.expr.left
         safe_ua = index_call.args[0]
         assert isinstance(safe_ua, ast.Call)
@@ -98,12 +101,14 @@ class TestTrafficTypeField:
 
     def test_default_value_is_regular(self):
         field = create_traffic_type_field(name="$virt_traffic_type")
+        assert isinstance(field.expr, ast.Call)
         default = field.expr.args[1]
         assert isinstance(default, ast.Constant)
         assert default.value == "Regular"
 
     def test_labels_contain_expected_values(self):
         field = create_traffic_type_field(name="$virt_traffic_type")
+        assert isinstance(field.expr, ast.Call)
         array_access = field.expr.args[2]
         assert isinstance(array_access, ast.ArrayAccess)
         labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
@@ -113,6 +118,7 @@ class TestTrafficTypeField:
 
     def test_uses_multiMatchAnyIndex(self):
         field = create_traffic_type_field(name="$virt_traffic_type")
+        assert isinstance(field.expr, ast.Call)
         comparison = field.expr.args[0]
         assert isinstance(comparison, ast.CompareOperation)
         assert isinstance(comparison.left, ast.Call)
@@ -127,12 +133,14 @@ class TestTrafficCategoryField:
 
     def test_default_value_is_regular(self):
         field = create_traffic_category_field(name="$virt_traffic_category")
+        assert isinstance(field.expr, ast.Call)
         default = field.expr.args[1]
         assert isinstance(default, ast.Constant)
         assert default.value == "regular"
 
     def test_labels_contain_expected_categories(self):
         field = create_traffic_category_field(name="$virt_traffic_category")
+        assert isinstance(field.expr, ast.Call)
         array_access = field.expr.args[2]
         labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
         assert "llm_crawler" in labels
@@ -153,12 +161,14 @@ class TestBotNameField:
 
     def test_default_value_is_empty_string(self):
         field = create_bot_name_field(name="$virt_bot_name")
+        assert isinstance(field.expr, ast.Call)
         default = field.expr.args[1]
         assert isinstance(default, ast.Constant)
         assert default.value == ""
 
     def test_labels_contain_expected_bot_names(self):
         field = create_bot_name_field(name="$virt_bot_name")
+        assert isinstance(field.expr, ast.Call)
         array_access = field.expr.args[2]
         labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
         assert "Googlebot" in labels
