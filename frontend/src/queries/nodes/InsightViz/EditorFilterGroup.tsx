@@ -5,6 +5,7 @@ import { Fragment, useState } from 'react'
 import { IconCollapse, IconExpand } from '@posthog/icons'
 
 import { LemonButton } from 'lib/lemon-ui/LemonButton'
+import { LemonField } from 'lib/lemon-ui/LemonField'
 import { inStorybook, inStorybookTestRunner, slugify } from 'lib/utils'
 
 import { InsightQueryNode } from '~/queries/schema/schema-general'

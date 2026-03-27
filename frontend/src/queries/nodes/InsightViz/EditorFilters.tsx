@@ -2,10 +2,9 @@ import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
 import posthog from 'posthog-js'
 import { useEffect, useMemo, useRef } from 'react'
-import { CSSTransition } from 'react-transition-group'
 
-import { IconInfo, IconX } from '@posthog/icons'
-import { LemonBanner, LemonButton, Link, Tooltip } from '@posthog/lemon-ui'
+import { IconInfo } from '@posthog/icons'
+import { Link, Tooltip } from '@posthog/lemon-ui'
 
 import { Resizer } from 'lib/components/Resizer/Resizer'
 import { resizerLogic } from 'lib/components/Resizer/resizerLogic'
@@ -31,7 +30,6 @@ import { SamplingDeprecationNotice } from 'scenes/insights/EditorFilters/Samplin
 import { WebAnalyticsEditorFilters } from 'scenes/insights/EditorFilters/WebAnalyticsEditorFilters'
 import { insightLogic } from 'scenes/insights/insightLogic'
 import { insightVizDataLogic } from 'scenes/insights/insightVizDataLogic'
-import { compareInsightTopLevelSections } from 'scenes/insights/utils'
 import MaxTool from 'scenes/max/MaxTool'
 import { castAssistantQuery } from 'scenes/max/utils'
 import { QUERY_TYPES_METADATA } from 'scenes/saved-insights/SavedInsights'
@@ -69,8 +67,11 @@ import {
 import { Breakdown } from './Breakdown'
 import { CumulativeStickinessFilter } from './CumulativeStickinessFilter'
 import { EditorFilterGroup } from './EditorFilterGroup'
+import { EditorFiltersShell } from './EditorFiltersShell'
 import { GlobalAndOrFilters } from './GlobalAndOrFilters'
 import { LifecycleToggles } from './LifecycleToggles'
+import { SessionAnalysisWarning } from './SessionAnalysisWarning'
+import { SuggestionBanner } from './SuggestionBanner'
 import { TrendsFormula } from './TrendsFormula'
 import { TrendsSeries } from './TrendsSeries'
 import { TrendsSeriesLabel } from './TrendsSeriesLabel'
@@ -109,7 +110,6 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
     const { isStepsFunnel, isTrendsFunnel } = useValues(funnelDataLogic(insightProps))
     const { setQuery } = useActions(insightVizDataLogic(insightProps))
 
-    const maxSuggestionActionsBanner = useRef<HTMLDivElement>(null)
     const panelRef = useRef<HTMLDivElement>(null)
     const resizerProps = useMemo(
         () => ({
@@ -127,12 +127,6 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
             posthog.capture('editor panel shown', { panel_width: panelWidth })
         }
     }, [editorPanelsEnabled, showing]) // oxlint-disable-line react-hooks/exhaustive-deps
-
-    useEffect(() => {
-        if (previousQuery && maxSuggestionActionsBanner.current) {
-            maxSuggestionActionsBanner.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-    }, [previousQuery])
 
     if (!querySource) {
         return null
@@ -578,60 +572,22 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
         </div>
     )
 
-    const suggestionBanner = previousQuery ? (
-        <div className="w-full px-2" ref={maxSuggestionActionsBanner}>
-            <div className="bg-surface-tertiary/80 w-full flex justify-between items-center p-1 pl-2 mx-auto rounded-bl rounded-br">
-                <div className="text-sm text-muted flex items-center gap-2 no-wrap">
-                    <span className="size-2 bg-accent-active rounded-full" />
-                    {(() => {
-                        const changedLabels = compareInsightTopLevelSections(previousQuery, suggestedQuery)
-                        const diffString = `🔍 ${pluralize(
-                            changedLabels.length,
-                            'section'
-                        )} changed: \n${changedLabels.join('\n')}`
-                        return (
-                            <div className="flex items-center gap-1">
-                                <span>{pluralize(changedLabels.length, 'change')}</span>
-                                {diffString && (
-                                    <Tooltip title={<div className="whitespace-pre-line">{diffString}</div>}>
-                                        <IconInfo className="text-sm text-muted cursor-help" />
-                                    </Tooltip>
-                                )}
-                            </div>
-                        )
-                    })()}
-                </div>
-                <LemonButton
-                    status="danger"
-                    onClick={() => onRejectSuggestedInsight()}
-                    tooltipPlacement="top"
-                    size="small"
-                    icon={<IconX />}
-                >
-                    Reject changes
-                </LemonButton>
-            </div>
-        </div>
-    ) : null
-
-    const sessionWarning = shouldShowSessionAnalysisWarning ? (
-        <LemonBanner type="info" className="mb-4">
-            When using sessions and session properties, events without session IDs will be excluded from the set of
-            results. <Link to="https://posthog.com/docs/user-guides/sessions">Learn more about sessions.</Link>
-        </LemonBanner>
-    ) : null
-
     if (!editorPanelsEnabled) {
         return (
-            <CSSTransition in={showing} timeout={250} classNames="anim-" mountOnEnter unmountOnExit>
-                <div className="EditorFiltersWrapper">
-                    {sessionWarning}
-                    <div>
-                        <MaxTool {...maxToolProps}>{filterContent}</MaxTool>
-                        {suggestionBanner}
+            <EditorFiltersShell query={query} showing={showing} embedded={embedded}>
+                {filterGroupsGroups.map(({ title, editorFilterGroups }) => (
+                    <div key={title} className="grow shrink basis-[28rem] flex flex-col gap-4 max-w-full">
+                        {editorFilterGroups.map((editorFilterGroup) => (
+                            <EditorFilterGroup
+                                key={editorFilterGroup.title}
+                                editorFilterGroup={editorFilterGroup}
+                                insightProps={insightProps}
+                                query={query}
+                            />
+                        ))}
                     </div>
-                </div>
-            </CSSTransition>
+                ))}
+            </EditorFiltersShell>
         )
     }
 
@@ -654,9 +610,15 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
             {showing && <Resizer {...resizerProps} />}
             <MaxTool {...maxToolProps} className="h-full [&_button.absolute]:!-top-1 [&_button.absolute]:!-right-1">
                 <div className={clsx('h-full overflow-y-auto', showing && 'px-3 pt-2 pb-4')}>
-                    {sessionWarning}
+                    {shouldShowSessionAnalysisWarning ? <SessionAnalysisWarning /> : null}
                     {filterContent}
-                    {suggestionBanner}
+                    {previousQuery && (
+                        <SuggestionBanner
+                            previousQuery={previousQuery}
+                            suggestedQuery={suggestedQuery}
+                            onReject={onRejectSuggestedInsight}
+                        />
+                    )}
                 </div>
             </MaxTool>
         </div>
