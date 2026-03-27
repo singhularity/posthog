@@ -146,20 +146,12 @@ export function InsightViz({
                                         : 'InsightCard__viz'
                                 }
                             >
-                                {editorPanelsEnabled ? (
+                                {(editorPanelsEnabled || !readOnly) && (
                                     <EditorFilters
                                         query={query.source}
-                                        showing={!readOnly && showingFilters}
+                                        showing={editorPanelsEnabled ? !readOnly && showingFilters : showingFilters}
                                         embedded={isEmbedded}
                                     />
-                                ) : (
-                                    !readOnly && (
-                                        <EditorFilters
-                                            query={query.source}
-                                            showing={showingFilters}
-                                            embedded={isEmbedded}
-                                        />
-                                    )
                                 )}
                                 {!isEmbedded ? <div className="flex-1 h-full overflow-auto">{display}</div> : display}
                             </div>

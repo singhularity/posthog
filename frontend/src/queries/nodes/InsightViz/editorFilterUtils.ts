@@ -57,5 +57,5 @@ export function getSeriesSummary(
         return null
     }
     const names = series.map((s) => s.custom_name || ('event' in s && s.event) || s.name).filter(Boolean)
-    return names.length > 0 ? names.join(', ') : pluralize(series.length, 'series')
+    return names.length > 0 ? names.join(', ') : pluralize(series.length, 'series', 'series')
 }

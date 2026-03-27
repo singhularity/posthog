@@ -5,6 +5,7 @@ import { Link, Tooltip } from '@posthog/lemon-ui'
 
 import { NON_BREAKDOWN_DISPLAY_TYPES } from 'lib/constants'
 import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
+import { pluralize } from 'lib/utils'
 import { funnelDataLogic } from 'scenes/funnels/funnelDataLogic'
 import { Attribution } from 'scenes/insights/EditorFilters/AttributionFilter'
 import { FunnelsAdvanced } from 'scenes/insights/EditorFilters/FunnelsAdvanced'
@@ -201,13 +202,12 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
             ]),
         },
         {
-            title: editorPanelsEnabled
-                ? isFunnels
+            title:
+                editorPanelsEnabled && isFunnels
                     ? 'Funnel settings'
-                    : isPaths
+                    : editorPanelsEnabled && isPaths
                       ? 'Path settings'
-                      : 'Advanced options'
-                : 'Advanced options',
+                      : 'Advanced options',
             defaultExpanded: editorPanelsEnabled ? false : undefined,
             editorFilters: visibleFilters([
                 { key: 'paths-advanced', component: PathsAdvanced, show: isPaths },
