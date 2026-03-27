@@ -32,6 +32,7 @@ import {
 import { CodeSnippet } from 'lib/components/CodeSnippet'
 import { PropertyFilters } from 'lib/components/PropertyFilters/PropertyFilters'
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { dayjs } from 'lib/dayjs'
 import { IconAdsClick } from 'lib/lemon-ui/icons'
 import { LemonField } from 'lib/lemon-ui/LemonField'
@@ -52,6 +53,8 @@ import { getRegisteredTriggerTypes } from '../registry/triggers/triggerTypeRegis
 import { HogFlowAction } from '../types'
 import { batchTriggerLogic, BLAST_RADIUS_LIMIT } from './batchTriggerLogic'
 import { HogFlowFunctionConfiguration } from './components/HogFlowFunctionConfiguration'
+import { RecurringSchedulePicker } from './components/RecurringSchedulePicker'
+import { scheduleLogic } from './scheduleLogic'
 
 type TriggerAction = Extract<HogFlowAction, { type: 'trigger' }>
 type EventTriggerConfig = {
@@ -578,6 +581,10 @@ function StepTriggerConfigurationBatch({
     config: Extract<HogFlowAction['config'], { type: 'batch' }>
 }): JSX.Element {
     const { partialSetWorkflowActionConfig } = useActions(workflowLogic)
+    const { workflow } = useValues(workflowLogic)
+    const { featureFlags } = useValues(featureFlagLogic)
+    const { currentSchedule, saveStatus } = useValues(scheduleLogic({ workflowId: workflow.id }))
+    const { saveSchedule, deleteSchedule } = useActions(scheduleLogic({ workflowId: workflow.id }))
 
     return (
         <div className="flex flex-col gap-2 my-2 w-full">
@@ -619,7 +626,27 @@ function StepTriggerConfigurationBatch({
                 />
             </div>
 
-            {/* TODO: Integrate RecurringSchedulePicker with separate schedule CRUD endpoints */}
+            {featureFlags[FEATURE_FLAGS.WORKFLOWS_RECURRING_SCHEDULES] && (
+                <>
+                    <LemonDivider />
+                    <div className="flex items-center gap-2">
+                        <LemonLabel>Schedule</LemonLabel>
+                        {saveStatus === 'saving' && <span className="text-xs text-muted">Saving...</span>}
+                        {saveStatus === 'saved' && <span className="text-xs text-success">Saved</span>}
+                        {saveStatus === 'error' && <span className="text-xs text-danger">Error saving</span>}
+                    </div>
+                    <RecurringSchedulePicker
+                        schedule={currentSchedule ?? null}
+                        onChange={(schedule) => {
+                            if (schedule) {
+                                saveSchedule(schedule)
+                            } else if (currentSchedule?.id) {
+                                deleteSchedule(currentSchedule.id)
+                            }
+                        }}
+                    />
+                </>
+            )}
         </div>
     )
 }
