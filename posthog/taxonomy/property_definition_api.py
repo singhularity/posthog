@@ -161,7 +161,7 @@ class QueryContext:
     event_property_filter: str = ""
     event_name_filter: str = ""
     is_feature_flag_filter: str = ""
-    excluded_properties_filter: str = ""
+    extra_where_conditions: str = ""
 
     order_by_search_relevance: bool = False
 
@@ -170,6 +170,8 @@ class QueryContext:
 
     # the event name filter is used with and without a posthog_eventproperty_table_join_alias qualifier
     event_name_join_filter: str = ""
+
+    tags_join: str = ""
 
     posthog_eventproperty_table_join_alias = "check_for_matching_event_property"
 
@@ -294,7 +296,7 @@ class QueryContext:
 
         return dataclasses.replace(
             self,
-            excluded_properties_filter=(
+            extra_where_conditions=(
                 f"AND NOT {self.property_definition_table}.name = ANY(%(excluded_properties)s)"
                 if len(excluded_list) > 0
                 else ""
@@ -310,8 +312,8 @@ class QueryContext:
             # exclude always excluded event properties
             return dataclasses.replace(
                 self,
-                excluded_properties_filter=(
-                    self.excluded_properties_filter
+                extra_where_conditions=(
+                    self.extra_where_conditions
                     + f"AND NOT {self.property_definition_table}.name = ANY(%(excluded_core_properties)s)"
                 ),
                 params={**self.params, "excluded_core_properties": list(ALWAYS_EXCLUDED_EVENT_PROPERTIES)},
@@ -320,8 +322,8 @@ class QueryContext:
             # exclude all properties starting with $ and other event properties defined in the taxonomy
             return dataclasses.replace(
                 self,
-                excluded_properties_filter=(
-                    self.excluded_properties_filter
+                extra_where_conditions=(
+                    self.extra_where_conditions
                     + f"AND NOT {self.property_definition_table}.name LIKE '$%%' AND NOT {self.property_definition_table}.name = ANY(%(excluded_core_properties)s)"
                 ),
                 params={
@@ -336,10 +338,8 @@ class QueryContext:
             hidden_filter = " AND (hidden IS NULL OR hidden = false)"
             return dataclasses.replace(
                 self,
-                excluded_properties_filter=(
-                    self.excluded_properties_filter + hidden_filter
-                    if self.excluded_properties_filter
-                    else hidden_filter
+                extra_where_conditions=(
+                    self.extra_where_conditions + hidden_filter if self.extra_where_conditions else hidden_filter
                 ),
             )
         return self
@@ -352,10 +352,8 @@ class QueryContext:
                 verified_filter = " AND (verified IS NULL OR verified = false)"
             return dataclasses.replace(
                 self,
-                excluded_properties_filter=(
-                    self.excluded_properties_filter + verified_filter
-                    if self.excluded_properties_filter
-                    else verified_filter
+                extra_where_conditions=(
+                    self.extra_where_conditions + verified_filter if self.extra_where_conditions else verified_filter
                 ),
             )
         return self
@@ -369,11 +367,26 @@ class QueryContext:
             return self
         return dataclasses.replace(
             self,
-            excluded_properties_filter=(
-                self.excluded_properties_filter + name_type_filter
-                if self.excluded_properties_filter
-                else name_type_filter
+            extra_where_conditions=(
+                self.extra_where_conditions + name_type_filter if self.extra_where_conditions else name_type_filter
             ),
+        )
+
+    def with_tags_filter(self, tags_list: list[str]) -> Self:
+        if not tags_list:
+            return self
+        return dataclasses.replace(
+            self,
+            tags_join=(
+                f"INNER JOIN posthog_taggeditem ON posthog_taggeditem.property_definition_id = {self.property_definition_table}.id"
+                " INNER JOIN posthog_tag ON posthog_tag.id = posthog_taggeditem.tag_id"
+            ),
+            extra_where_conditions=(
+                self.extra_where_conditions + " AND posthog_tag.name = ANY(%(tags_list)s)"
+                if self.extra_where_conditions
+                else " AND posthog_tag.name = ANY(%(tags_list)s)"
+            ),
+            params={**self.params, "tags_list": tags_list},
         )
 
     def as_sql(self, order_by_verified: bool):
@@ -381,14 +394,16 @@ class QueryContext:
         length_ordering = (
             f"length({self.property_definition_table}.name) ASC," if self.order_by_search_relevance else ""
         )
+        distinct = "DISTINCT" if self.tags_join else ""
         query = f"""
-            SELECT {self.property_definition_fields}, {self.event_property_field} AS is_seen_on_filtered_events
+            SELECT {distinct} {self.property_definition_fields}, {self.event_property_field} AS is_seen_on_filtered_events
             FROM {self.table}
             {self._join_on_event_property()}
+            {self.tags_join}
             WHERE coalesce({self.property_definition_table}.project_id, {self.property_definition_table}.team_id) = %(project_id)s
               AND type = %(type)s
               AND coalesce(group_type_index, -1) = %(group_type_index)s
-              {self.excluded_properties_filter}
+              {self.extra_where_conditions}
              {self.name_filter} {self.numerical_filter} {self.search_query} {self.event_property_filter} {self.is_feature_flag_filter}
              {self.event_name_filter}
             ORDER BY is_seen_on_filtered_events DESC, {length_ordering} {verified_ordering} {self.property_definition_table}.name ASC
@@ -399,13 +414,14 @@ class QueryContext:
 
     def as_count_sql(self):
         query = f"""
-            SELECT count(*) as full_count
+            SELECT count(DISTINCT {self.property_definition_table}.id) as full_count
             FROM {self.table}
             {self._join_on_event_property()}
+            {self.tags_join}
             WHERE coalesce({self.property_definition_table}.project_id, {self.property_definition_table}.team_id) = %(project_id)s
               AND type = %(type)s
               AND coalesce(group_type_index, -1) = %(group_type_index)s
-             {self.excluded_properties_filter} {self.name_filter} {self.numerical_filter} {self.search_query} {self.event_property_filter} {self.is_feature_flag_filter}
+             {self.extra_where_conditions} {self.name_filter} {self.numerical_filter} {self.search_query} {self.event_property_filter} {self.is_feature_flag_filter}
              {self.event_name_filter}
             """
 
@@ -719,6 +735,7 @@ class PropertyDefinitionViewSet(
                 )
                 .with_verified_filter(query.validated_data.get("verified", None), use_enterprise_taxonomy=EE_AVAILABLE)
                 .with_property_name_type_filter(query.validated_data.get("property_name_type", "all"))
+                .with_tags_filter(self._parse_tags(query.validated_data.get("tags")))
             )
 
             span.set_attribute("joins_event_property", query_context.should_join_event_property)
@@ -733,20 +750,17 @@ class PropertyDefinitionViewSet(
             span.set_attribute("full_count", full_count)
 
             # nosemgrep: python.django.security.audit.custom-expression-as-sql.custom-expression-as-sql (all user input goes through query_context.params)
-            raw_queryset = queryset.raw(query_context.as_sql(order_by_verified), params=query_context.params)
+            return queryset.raw(query_context.as_sql(order_by_verified), params=query_context.params)
 
-            # Apply tags filter if provided
-            tags = query.validated_data.get("tags")
-            if tags:
-                try:
-                    tags_list = json.loads(tags)
-                    if tags_list:
-                        ids = [obj.id for obj in raw_queryset]
-                        return queryset.filter(id__in=ids, tagged_items__tag__name__in=tags_list).distinct()
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-            return raw_queryset
+    @staticmethod
+    def _parse_tags(tags: Optional[str]) -> list[str]:
+        if not tags:
+            return []
+        try:
+            parsed = json.loads(tags)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []
 
     def get_serializer_class(self) -> type[serializers.ModelSerializer]:
         serializer_class: type[serializers.ModelSerializer] = self.serializer_class
