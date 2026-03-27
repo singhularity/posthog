@@ -2055,6 +2055,15 @@ export type PropertyDefinitionsListParams = {
      */
     properties?: string
     /**
+ * Filter by property name type: posthog ($ prefixed) or custom
+
+* `all` - all
+* `posthog` - posthog
+* `custom` - custom
+ * @minLength 1
+ */
+    property_name_type?: PropertyDefinitionsListPropertyNameType
+    /**
      * Searches properties by name
      */
     search?: string
@@ -2079,6 +2088,15 @@ export type PropertyDefinitionsListParams = {
      */
     verified?: boolean | null
 }
+
+export type PropertyDefinitionsListPropertyNameType =
+    (typeof PropertyDefinitionsListPropertyNameType)[keyof typeof PropertyDefinitionsListPropertyNameType]
+
+export const PropertyDefinitionsListPropertyNameType = {
+    All: 'all',
+    Posthog: 'posthog',
+    Custom: 'custom',
+} as const
 
 export type PropertyDefinitionsListType = (typeof PropertyDefinitionsListType)[keyof typeof PropertyDefinitionsListType]
 

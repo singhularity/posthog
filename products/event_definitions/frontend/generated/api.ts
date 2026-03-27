@@ -12,7 +12,16 @@ import type {
     EnterpriseEventDefinitionApi,
     EventDefinitionApi,
     EventDefinitionsByNameRetrieveParams,
+    EventDefinitionsCreateParams,
+    EventDefinitionsDestroyParams,
+    EventDefinitionsGolangRetrieveParams,
     EventDefinitionsListParams,
+    EventDefinitionsMetricsRetrieveParams,
+    EventDefinitionsPartialUpdateParams,
+    EventDefinitionsPythonRetrieveParams,
+    EventDefinitionsRetrieveParams,
+    EventDefinitionsTypescriptRetrieveParams,
+    EventDefinitionsUpdateParams,
     PaginatedEnterpriseEventDefinitionListApi,
     PatchedEnterpriseEventDefinitionApi,
 } from './api.schemas'
@@ -61,16 +70,29 @@ export const eventDefinitionsList = async (
     })
 }
 
-export const getEventDefinitionsCreateUrl = (projectId: string) => {
-    return `/api/projects/${projectId}/event_definitions/`
+export const getEventDefinitionsCreateUrl = (projectId: string, params?: EventDefinitionsCreateParams) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/`
 }
 
 export const eventDefinitionsCreate = async (
     projectId: string,
     enterpriseEventDefinitionApi: NonReadonly<EnterpriseEventDefinitionApi>,
+    params?: EventDefinitionsCreateParams,
     options?: RequestInit
 ): Promise<EnterpriseEventDefinitionApi> => {
-    return apiMutator<EnterpriseEventDefinitionApi>(getEventDefinitionsCreateUrl(projectId), {
+    return apiMutator<EnterpriseEventDefinitionApi>(getEventDefinitionsCreateUrl(projectId, params), {
         ...options,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -78,32 +100,62 @@ export const eventDefinitionsCreate = async (
     })
 }
 
-export const getEventDefinitionsRetrieveUrl = (projectId: string, id: string) => {
-    return `/api/projects/${projectId}/event_definitions/${id}/`
+export const getEventDefinitionsRetrieveUrl = (
+    projectId: string,
+    id: string,
+    params?: EventDefinitionsRetrieveParams
+) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/${id}/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/${id}/`
 }
 
 export const eventDefinitionsRetrieve = async (
     projectId: string,
     id: string,
+    params?: EventDefinitionsRetrieveParams,
     options?: RequestInit
 ): Promise<EnterpriseEventDefinitionApi> => {
-    return apiMutator<EnterpriseEventDefinitionApi>(getEventDefinitionsRetrieveUrl(projectId, id), {
+    return apiMutator<EnterpriseEventDefinitionApi>(getEventDefinitionsRetrieveUrl(projectId, id, params), {
         ...options,
         method: 'GET',
     })
 }
 
-export const getEventDefinitionsUpdateUrl = (projectId: string, id: string) => {
-    return `/api/projects/${projectId}/event_definitions/${id}/`
+export const getEventDefinitionsUpdateUrl = (projectId: string, id: string, params?: EventDefinitionsUpdateParams) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/${id}/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/${id}/`
 }
 
 export const eventDefinitionsUpdate = async (
     projectId: string,
     id: string,
     enterpriseEventDefinitionApi: NonReadonly<EnterpriseEventDefinitionApi>,
+    params?: EventDefinitionsUpdateParams,
     options?: RequestInit
 ): Promise<EnterpriseEventDefinitionApi> => {
-    return apiMutator<EnterpriseEventDefinitionApi>(getEventDefinitionsUpdateUrl(projectId, id), {
+    return apiMutator<EnterpriseEventDefinitionApi>(getEventDefinitionsUpdateUrl(projectId, id, params), {
         ...options,
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -111,17 +163,34 @@ export const eventDefinitionsUpdate = async (
     })
 }
 
-export const getEventDefinitionsPartialUpdateUrl = (projectId: string, id: string) => {
-    return `/api/projects/${projectId}/event_definitions/${id}/`
+export const getEventDefinitionsPartialUpdateUrl = (
+    projectId: string,
+    id: string,
+    params?: EventDefinitionsPartialUpdateParams
+) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/${id}/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/${id}/`
 }
 
 export const eventDefinitionsPartialUpdate = async (
     projectId: string,
     id: string,
     patchedEnterpriseEventDefinitionApi: NonReadonly<PatchedEnterpriseEventDefinitionApi>,
+    params?: EventDefinitionsPartialUpdateParams,
     options?: RequestInit
 ): Promise<EnterpriseEventDefinitionApi> => {
-    return apiMutator<EnterpriseEventDefinitionApi>(getEventDefinitionsPartialUpdateUrl(projectId, id), {
+    return apiMutator<EnterpriseEventDefinitionApi>(getEventDefinitionsPartialUpdateUrl(projectId, id, params), {
         ...options,
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -129,27 +198,65 @@ export const eventDefinitionsPartialUpdate = async (
     })
 }
 
-export const getEventDefinitionsDestroyUrl = (projectId: string, id: string) => {
-    return `/api/projects/${projectId}/event_definitions/${id}/`
+export const getEventDefinitionsDestroyUrl = (
+    projectId: string,
+    id: string,
+    params?: EventDefinitionsDestroyParams
+) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/${id}/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/${id}/`
 }
 
-export const eventDefinitionsDestroy = async (projectId: string, id: string, options?: RequestInit): Promise<void> => {
-    return apiMutator<void>(getEventDefinitionsDestroyUrl(projectId, id), {
+export const eventDefinitionsDestroy = async (
+    projectId: string,
+    id: string,
+    params?: EventDefinitionsDestroyParams,
+    options?: RequestInit
+): Promise<void> => {
+    return apiMutator<void>(getEventDefinitionsDestroyUrl(projectId, id, params), {
         ...options,
         method: 'DELETE',
     })
 }
 
-export const getEventDefinitionsMetricsRetrieveUrl = (projectId: string, id: string) => {
-    return `/api/projects/${projectId}/event_definitions/${id}/metrics/`
+export const getEventDefinitionsMetricsRetrieveUrl = (
+    projectId: string,
+    id: string,
+    params?: EventDefinitionsMetricsRetrieveParams
+) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/${id}/metrics/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/${id}/metrics/`
 }
 
 export const eventDefinitionsMetricsRetrieve = async (
     projectId: string,
     id: string,
+    params?: EventDefinitionsMetricsRetrieveParams,
     options?: RequestInit
 ): Promise<void> => {
-    return apiMutator<void>(getEventDefinitionsMetricsRetrieveUrl(projectId, id), {
+    return apiMutator<void>(getEventDefinitionsMetricsRetrieveUrl(projectId, id, params), {
         ...options,
         method: 'GET',
     })
@@ -188,34 +295,91 @@ export const eventDefinitionsByNameRetrieve = async (
     })
 }
 
-export const getEventDefinitionsGolangRetrieveUrl = (projectId: string) => {
-    return `/api/projects/${projectId}/event_definitions/golang/`
+export const getEventDefinitionsGolangRetrieveUrl = (
+    projectId: string,
+    params?: EventDefinitionsGolangRetrieveParams
+) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/golang/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/golang/`
 }
 
-export const eventDefinitionsGolangRetrieve = async (projectId: string, options?: RequestInit): Promise<void> => {
-    return apiMutator<void>(getEventDefinitionsGolangRetrieveUrl(projectId), {
+export const eventDefinitionsGolangRetrieve = async (
+    projectId: string,
+    params?: EventDefinitionsGolangRetrieveParams,
+    options?: RequestInit
+): Promise<void> => {
+    return apiMutator<void>(getEventDefinitionsGolangRetrieveUrl(projectId, params), {
         ...options,
         method: 'GET',
     })
 }
 
-export const getEventDefinitionsPythonRetrieveUrl = (projectId: string) => {
-    return `/api/projects/${projectId}/event_definitions/python/`
+export const getEventDefinitionsPythonRetrieveUrl = (
+    projectId: string,
+    params?: EventDefinitionsPythonRetrieveParams
+) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/python/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/python/`
 }
 
-export const eventDefinitionsPythonRetrieve = async (projectId: string, options?: RequestInit): Promise<void> => {
-    return apiMutator<void>(getEventDefinitionsPythonRetrieveUrl(projectId), {
+export const eventDefinitionsPythonRetrieve = async (
+    projectId: string,
+    params?: EventDefinitionsPythonRetrieveParams,
+    options?: RequestInit
+): Promise<void> => {
+    return apiMutator<void>(getEventDefinitionsPythonRetrieveUrl(projectId, params), {
         ...options,
         method: 'GET',
     })
 }
 
-export const getEventDefinitionsTypescriptRetrieveUrl = (projectId: string) => {
-    return `/api/projects/${projectId}/event_definitions/typescript/`
+export const getEventDefinitionsTypescriptRetrieveUrl = (
+    projectId: string,
+    params?: EventDefinitionsTypescriptRetrieveParams
+) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : value.toString())
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/event_definitions/typescript/?${stringifiedParams}`
+        : `/api/projects/${projectId}/event_definitions/typescript/`
 }
 
-export const eventDefinitionsTypescriptRetrieve = async (projectId: string, options?: RequestInit): Promise<void> => {
-    return apiMutator<void>(getEventDefinitionsTypescriptRetrieveUrl(projectId), {
+export const eventDefinitionsTypescriptRetrieve = async (
+    projectId: string,
+    params?: EventDefinitionsTypescriptRetrieveParams,
+    options?: RequestInit
+): Promise<void> => {
+    return apiMutator<void>(getEventDefinitionsTypescriptRetrieveUrl(projectId, params), {
         ...options,
         method: 'GET',
     })
