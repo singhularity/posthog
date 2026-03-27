@@ -7,7 +7,8 @@ from unittest.mock import ANY, patch
 from parameterized import parameterized
 from rest_framework import status
 
-from posthog.models import ActivityLog, EventDefinition, EventProperty, Organization, PropertyDefinition, Team
+from posthog.models import ActivityLog, EventDefinition, EventProperty, Organization, PropertyDefinition, Tag, Team
+from posthog.models.tagged_item import TaggedItem
 from posthog.taxonomy.property_definition_api import PropertyDefinitionQuerySerializer, PropertyDefinitionViewSet
 
 
@@ -819,3 +820,106 @@ class TestPropertyDefinitionQuerySerializer(BaseTest):
         assert not PropertyDefinitionQuerySerializer(data={"type": "group", "group_type_index": 77}).is_valid()
         assert not PropertyDefinitionQuerySerializer(data={"type": "group", "group_type_index": -1}).is_valid()
         assert not PropertyDefinitionQuerySerializer(data={"type": "event", "group_type_index": 3}).is_valid()
+
+    def test_tags_validation_valid(self):
+        serializer = PropertyDefinitionQuerySerializer(data={"tags": '["alpha", "beta"]'})
+        assert serializer.is_valid(), serializer.errors
+
+    def test_tags_validation_invalid_json(self):
+        serializer = PropertyDefinitionQuerySerializer(data={"tags": "not-json"})
+        assert not serializer.is_valid()
+        assert "tags" in serializer.errors
+
+    def test_tags_validation_non_list(self):
+        serializer = PropertyDefinitionQuerySerializer(data={"tags": '{"key": "value"}'})
+        assert not serializer.is_valid()
+        assert "tags" in serializer.errors
+
+    def test_tags_validation_non_string_items(self):
+        serializer = PropertyDefinitionQuerySerializer(data={"tags": "[1, 2]"})
+        assert not serializer.is_valid()
+        assert "tags" in serializer.errors
+
+    @parameterized.expand(
+        [
+            ("all", True),
+            ("posthog", True),
+            ("custom", True),
+            ("invalid_choice", False),
+        ]
+    )
+    def test_property_name_type_validation(self, value: str, expected_valid: bool):
+        serializer = PropertyDefinitionQuerySerializer(data={"property_name_type": value})
+        assert serializer.is_valid() == expected_valid
+
+    @parameterized.expand(
+        [
+            ("true", True),
+            ("false", True),
+        ]
+    )
+    def test_verified_validation(self, value: str, expected_valid: bool):
+        serializer = PropertyDefinitionQuerySerializer(data={"verified": value})
+        assert serializer.is_valid() == expected_valid
+
+
+class TestPropertyDefinitionFilters(APIBaseTest):
+    def setUp(self):
+        super().setUp()
+        PropertyDefinition.objects.get_or_create(team=self.team, name="$browser")
+        PropertyDefinition.objects.get_or_create(team=self.team, name="$current_url")
+        PropertyDefinition.objects.get_or_create(team=self.team, name="custom_prop")
+        PropertyDefinition.objects.get_or_create(team=self.team, name="another_custom")
+
+    def test_filter_by_property_name_type_posthog(self):
+        response = self.client.get(f"/api/projects/{self.team.pk}/property_definitions/?property_name_type=posthog")
+        assert response.status_code == status.HTTP_200_OK
+        names = [r["name"] for r in response.json()["results"]]
+        assert all(name.startswith("$") for name in names)
+        assert "$browser" in names
+        assert "$current_url" in names
+        assert "custom_prop" not in names
+        assert "another_custom" not in names
+
+    def test_filter_by_property_name_type_custom(self):
+        response = self.client.get(f"/api/projects/{self.team.pk}/property_definitions/?property_name_type=custom")
+        assert response.status_code == status.HTTP_200_OK
+        names = [r["name"] for r in response.json()["results"]]
+        assert all(not name.startswith("$") for name in names)
+        assert "custom_prop" in names
+        assert "another_custom" in names
+        assert "$browser" not in names
+        assert "$current_url" not in names
+
+    def test_filter_by_tags(self):
+        prop = PropertyDefinition.objects.get(team=self.team, name="custom_prop")
+        tag = Tag.objects.create(name="tag1", team=self.team)
+        TaggedItem.objects.create(tag=tag, property_definition=prop)
+
+        response = self.client.get(f'/api/projects/{self.team.pk}/property_definitions/?tags=["tag1"]')
+        assert response.status_code == status.HTTP_200_OK
+        names = [r["name"] for r in response.json()["results"]]
+        assert "custom_prop" in names
+        assert "another_custom" not in names
+        assert "$browser" not in names
+
+    def test_filter_by_tags_pagination_correct(self):
+        prop_a = PropertyDefinition.objects.get(team=self.team, name="custom_prop")
+        prop_b = PropertyDefinition.objects.get(team=self.team, name="another_custom")
+        tag = Tag.objects.create(name="shared_tag", team=self.team)
+        TaggedItem.objects.create(tag=tag, property_definition=prop_a)
+        TaggedItem.objects.create(tag=tag, property_definition=prop_b)
+
+        response = self.client.get(f'/api/projects/{self.team.pk}/property_definitions/?tags=["shared_tag"]')
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["count"] == 2
+        assert len(data["results"]) == 2
+
+    def test_filter_by_tags_invalid_json(self):
+        response = self.client.get(f"/api/projects/{self.team.pk}/property_definitions/?tags=not-valid-json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_tags_validation_rejects_non_string_items(self):
+        response = self.client.get(f"/api/projects/{self.team.pk}/property_definitions/?tags=[1,2]")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
