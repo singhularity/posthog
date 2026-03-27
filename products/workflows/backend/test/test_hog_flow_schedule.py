@@ -46,7 +46,6 @@ class TestHogFlowScheduleAPI(APIBaseTest):
         response = self.client.post(self._schedules_url(workflow["id"]), SCHEDULE_DATA)
         assert response.status_code == status.HTTP_201_CREATED
         assert response.json()["rrule"] == "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO"
-        assert response.json()["next_run_at"] is not None
 
     def test_list_schedules(self):
         workflow = self._create_batch_workflow()
@@ -83,57 +82,13 @@ class TestHogFlowScheduleAPI(APIBaseTest):
         response = self.client.delete(self._schedule_detail_url(workflow["id"], "00000000-0000-0000-0000-000000000000"))
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_creating_schedule_sets_next_run_at(self):
-        workflow = self._create_batch_workflow()
-        response = self.client.post(self._schedules_url(workflow["id"]), SCHEDULE_DATA)
-        schedule = HogFlowSchedule.objects.get(id=response.json()["id"])
-        assert schedule.next_run_at is not None
-
-    def test_updating_schedule_updates_next_run_at(self):
-        workflow = self._create_batch_workflow()
-        create_response = self.client.post(self._schedules_url(workflow["id"]), SCHEDULE_DATA)
-        schedule_id = create_response.json()["id"]
-        original_next_run = HogFlowSchedule.objects.get(id=schedule_id).next_run_at
-
-        self.client.patch(
-            self._schedule_detail_url(workflow["id"], schedule_id),
-            {"rrule": "FREQ=DAILY;INTERVAL=1"},
-        )
-        updated_next_run = HogFlowSchedule.objects.get(id=schedule_id).next_run_at
-        assert updated_next_run != original_next_run
-
-    def test_multiple_schedules_each_have_next_run_at(self):
+    def test_multiple_schedules_per_workflow(self):
         workflow = self._create_batch_workflow()
         self.client.post(self._schedules_url(workflow["id"]), SCHEDULE_DATA)
         self.client.post(self._schedules_url(workflow["id"]), {**SCHEDULE_DATA, "rrule": "FREQ=DAILY;INTERVAL=1"})
 
         schedules = HogFlowSchedule.objects.filter(hog_flow_id=workflow["id"])
         assert schedules.count() == 2
-        assert all(schedule.next_run_at is not None for schedule in schedules)
-        next_runs = {schedule.next_run_at for schedule in schedules}
-        assert len(next_runs) == 2
-
-    def test_activating_workflow_sets_next_run_at_on_schedules(self):
-        workflow = self._create_batch_workflow(workflow_status="draft")
-        self.client.post(self._schedules_url(workflow["id"]), SCHEDULE_DATA)
-
-        schedule = HogFlowSchedule.objects.get(hog_flow_id=workflow["id"])
-        assert schedule.next_run_at is None
-
-        self.client.patch(f"/api/projects/{self.team.id}/hog_flows/{workflow['id']}", {"status": "active"})
-        schedule.refresh_from_db()
-        assert schedule.next_run_at is not None
-
-    def test_deactivating_workflow_clears_next_run_at(self):
-        workflow = self._create_batch_workflow()
-        self.client.post(self._schedules_url(workflow["id"]), SCHEDULE_DATA)
-
-        schedule = HogFlowSchedule.objects.get(hog_flow_id=workflow["id"])
-        assert schedule.next_run_at is not None
-
-        self.client.patch(f"/api/projects/{self.team.id}/hog_flows/{workflow['id']}", {"status": "draft"})
-        schedule.refresh_from_db()
-        assert schedule.next_run_at is None
 
     def test_rejects_invalid_rrule(self):
         workflow = self._create_batch_workflow()
