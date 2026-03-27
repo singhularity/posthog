@@ -27,6 +27,12 @@ const verifiedOptions: LemonSelectOptions<string> = [
     { value: 'false', label: 'Unverified only' },
 ]
 
+const propertyNameTypeOptions: LemonSelectOptions<string> = [
+    { value: '', label: 'All properties' },
+    { value: 'posthog', label: 'PostHog properties' },
+    { value: 'custom', label: 'Custom properties' },
+]
+
 export function PropertyDefinitionsTable(): JSX.Element {
     const { propertyDefinitions, propertyDefinitionsLoading, filters, propertyTypeOptions } =
         useValues(propertyDefinitionsTableLogic)
@@ -118,6 +124,17 @@ export function PropertyDefinitionsTable(): JSX.Element {
                             setFilters({ tags })
                         }}
                         data-attr="property-tags-filter"
+                        size="small"
+                    />
+                    <span>Source:</span>
+                    <LemonSelect
+                        value={filters.property_name_type ?? ''}
+                        options={propertyNameTypeOptions}
+                        data-attr="property-name-type-filter"
+                        dropdownMatchSelectWidth={false}
+                        onChange={(value) => {
+                            setFilters({ property_name_type: value || undefined })
+                        }}
                         size="small"
                     />
                     <span>Type:</span>

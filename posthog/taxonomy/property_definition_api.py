@@ -115,6 +115,13 @@ class PropertyDefinitionQuerySerializer(serializers.Serializer):
         required=False,
     )
 
+    property_name_type = serializers.ChoiceField(
+        choices=["all", "posthog", "custom"],
+        help_text="Filter by property name type: posthog ($ prefixed) or custom",
+        default="all",
+        required=False,
+    )
+
     def validate(self, attrs):
         type_ = attrs.get("type", "event")
 
@@ -352,6 +359,22 @@ class QueryContext:
                 ),
             )
         return self
+
+    def with_property_name_type_filter(self, property_name_type: str) -> Self:
+        if property_name_type == "posthog":
+            name_type_filter = f" AND {self.property_definition_table}.name LIKE '$%%'"
+        elif property_name_type == "custom":
+            name_type_filter = f" AND {self.property_definition_table}.name NOT LIKE '$%%'"
+        else:
+            return self
+        return dataclasses.replace(
+            self,
+            excluded_properties_filter=(
+                self.excluded_properties_filter + name_type_filter
+                if self.excluded_properties_filter
+                else name_type_filter
+            ),
+        )
 
     def as_sql(self, order_by_verified: bool):
         verified_ordering = "verified DESC NULLS LAST," if order_by_verified else ""
@@ -695,6 +718,7 @@ class PropertyDefinitionViewSet(
                     query.validated_data.get("exclude_hidden", False), use_enterprise_taxonomy=EE_AVAILABLE
                 )
                 .with_verified_filter(query.validated_data.get("verified", None), use_enterprise_taxonomy=EE_AVAILABLE)
+                .with_property_name_type_filter(query.validated_data.get("property_name_type", "all"))
             )
 
             span.set_attribute("joins_event_property", query_context.should_join_event_property)

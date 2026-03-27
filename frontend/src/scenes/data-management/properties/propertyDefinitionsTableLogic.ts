@@ -24,6 +24,7 @@ export interface Filters {
     group_type_index: number | null
     verified?: string
     tags?: string[]
+    property_name_type?: string
 }
 
 function cleanFilters(filter: Partial<Filters>): Filters {
@@ -33,6 +34,7 @@ function cleanFilters(filter: Partial<Filters>): Filters {
         group_type_index: null,
         verified: undefined,
         tags: undefined,
+        property_name_type: undefined,
         ...filter,
     }
 }
@@ -44,6 +46,7 @@ function removeDefaults(filter: Filters): Partial<Filters> {
         group_type_index: filter.group_type_index !== null ? filter.group_type_index : undefined,
         verified: filter.verified !== undefined ? filter.verified : undefined,
         tags: filter.tags && filter.tags.length > 0 ? filter.tags : undefined,
+        property_name_type: filter.property_name_type !== undefined ? filter.property_name_type : undefined,
     }
 }
 
@@ -175,6 +178,9 @@ export const propertyDefinitionsTableLogic = kea<propertyDefinitionsTableLogicTy
             }
             if (values.filters.tags && values.filters.tags.length > 0) {
                 params.tags = JSON.stringify(values.filters.tags)
+            }
+            if (values.filters.property_name_type !== undefined) {
+                params.property_name_type = values.filters.property_name_type
             }
             actions.loadPropertyDefinitions(
                 normalizePropertyDefinitionEndpointUrl(values.propertyDefinitions.current, params, true)
