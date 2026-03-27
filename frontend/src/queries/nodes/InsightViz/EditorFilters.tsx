@@ -1,13 +1,8 @@
-import clsx from 'clsx'
-import { useActions, useValues } from 'kea'
-import posthog from 'posthog-js'
-import { useEffect, useMemo, useRef } from 'react'
+import { useValues } from 'kea'
 
 import { IconInfo } from '@posthog/icons'
 import { Link, Tooltip } from '@posthog/lemon-ui'
 
-import { Resizer } from 'lib/components/Resizer/Resizer'
-import { resizerLogic } from 'lib/components/Resizer/resizerLogic'
 import { NON_BREAKDOWN_DISPLAY_TYPES } from 'lib/constants'
 import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 import { pluralize } from 'lib/utils'
@@ -30,29 +25,16 @@ import { SamplingDeprecationNotice } from 'scenes/insights/EditorFilters/Samplin
 import { WebAnalyticsEditorFilters } from 'scenes/insights/EditorFilters/WebAnalyticsEditorFilters'
 import { insightLogic } from 'scenes/insights/insightLogic'
 import { insightVizDataLogic } from 'scenes/insights/insightVizDataLogic'
-import MaxTool from 'scenes/max/MaxTool'
-import { castAssistantQuery } from 'scenes/max/utils'
-import { QUERY_TYPES_METADATA } from 'scenes/saved-insights/SavedInsights'
 import { userLogic } from 'scenes/userLogic'
 
 import { StickinessCriteria } from '~/queries/nodes/InsightViz/StickinessCriteria'
 import {
-    AssistantFunnelsQuery,
-    AssistantHogQLQuery,
-    AssistantRetentionQuery,
-    AssistantTrendsQuery,
-} from '~/queries/schema/schema-assistant-queries'
-import {
     BreakdownFilter,
-    DataVisualizationNode,
     InsightQueryNode,
-    InsightVizNode,
-    NodeKind,
-    QuerySchema,
     WebOverviewQuery,
     WebStatsTableQuery,
 } from '~/queries/schema/schema-general'
-import { isHogQLQuery, isInsightQueryNode, isWebAnalyticsInsightQuery } from '~/queries/utils'
+import { isWebAnalyticsInsightQuery } from '~/queries/utils'
 import {
     AnyPropertyFilter,
     AvailableFeature,
@@ -69,9 +51,8 @@ import { EditorFilterGroup } from './EditorFilterGroup'
 import { EditorFiltersShell } from './EditorFiltersShell'
 import { visibleFilters } from './editorFilterUtils'
 import { GlobalAndOrFilters } from './GlobalAndOrFilters'
+import { InsightEditorPanel } from './InsightEditorPanel'
 import { LifecycleToggles } from './LifecycleToggles'
-import { SessionAnalysisWarning } from './SessionAnalysisWarning'
-import { SuggestionBanner } from './SuggestionBanner'
 import { TrendsFormula } from './TrendsFormula'
 import { TrendsSeries } from './TrendsSeries'
 import { TrendsSeriesLabel } from './TrendsSeriesLabel'
@@ -98,35 +79,13 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
         display,
         pathsFilter,
         querySource,
-        shouldShowSessionAnalysisWarning,
         hasFormula,
         series,
         breakdownFilter,
         properties,
     } = useValues(insightVizDataLogic(insightProps))
 
-    const { handleInsightSuggested, onRejectSuggestedInsight } = useActions(insightLogic(insightProps))
-    const { previousQuery, suggestedQuery } = useValues(insightLogic(insightProps))
     const { isStepsFunnel, isTrendsFunnel } = useValues(funnelDataLogic(insightProps))
-    const { setQuery } = useActions(insightVizDataLogic(insightProps))
-
-    const panelRef = useRef<HTMLDivElement>(null)
-    const resizerProps = useMemo(
-        () => ({
-            logicKey: 'insight-editor-panel',
-            persistent: true,
-            placement: 'right' as const,
-            containerRef: panelRef,
-        }),
-        []
-    )
-    const { desiredSize: panelWidth, isResizeInProgress: isResizing } = useValues(resizerLogic(resizerProps))
-
-    useEffect(() => {
-        if (editorPanelsEnabled && showing) {
-            posthog.capture('editor panel shown', { panel_width: panelWidth })
-        }
-    }, [editorPanelsEnabled, showing]) // oxlint-disable-line react-hooks/exhaustive-deps
 
     if (!querySource) {
         return null
@@ -142,9 +101,6 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
             />
         )
     }
-
-    // MaxTool should not be active when insights are embedded (e.g., in notebooks)
-    const maxToolActive = !embedded
 
     const hasBreakdown =
         (isTrends && !NON_BREAKDOWN_DISPLAY_TYPES.includes(display || ChartDisplayType.ActionsLineGraph)) ||
@@ -172,9 +128,7 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
     const exclusionCount = editorPanelsEnabled && isPaths ? (pathsFilter?.excludeEvents?.length ?? 0) : 0
     const exclusionsSummary = exclusionCount > 0 ? pluralize(exclusionCount, 'exclusion') : null
 
-    // When panels are enabled and showing retention, split into two top-level groups instead of nesting in General
     const leftEditorFilterGroups: InsightEditorFilterGroup[] = [
-        // Panels+retention: dedicated top-level groups (hidden otherwise via visibleGroups)
         {
             title: 'Retention condition',
             defaultExpanded: true,
@@ -187,7 +141,6 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
             show: editorPanelsEnabled && isRetention,
             editorFilters: [{ key: 'retention-options', component: RetentionOptions }],
         },
-        // Classic path: General group (all insight types except panels+retention)
         {
             title: 'General',
             show: !(editorPanelsEnabled && isRetention),
@@ -207,7 +160,12 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
                 },
                 { key: 'query-steps', component: FunnelsQuerySteps, show: isFunnels },
                 { key: 'event-types', label: 'Event Types', component: PathsEventsTypes, show: isPaths },
-                { key: 'hogql', label: 'SQL Expression', component: PathsHogQL, show: isPaths && !!hasPathsHogQL },
+                {
+                    key: 'hogql',
+                    label: 'SQL Expression',
+                    component: PathsHogQL,
+                    show: isPaths && !!hasPathsHogQL,
+                },
                 {
                     key: 'wildcard-groups',
                     label: 'Wildcard Groups',
@@ -224,7 +182,12 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
                     ),
                 },
                 { key: 'start-target', label: 'Starts at', component: PathsTargetStart, show: isPaths },
-                { key: 'ends-target', label: 'Ends at', component: PathsTargetEnd, show: isPaths && hasPathsAdvanced },
+                {
+                    key: 'ends-target',
+                    label: 'Ends at',
+                    component: PathsTargetEnd,
+                    show: isPaths && hasPathsAdvanced,
+                },
             ]),
         },
         {
@@ -454,64 +417,6 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
               { title: 'right', editorFilterGroups: visibleGroups(rightEditorFilterGroups) },
           ]
 
-    const QueryTypeIcon = QUERY_TYPES_METADATA[query.kind].icon
-
-    const maxToolProps = {
-        identifier: 'create_insight' as const,
-        context: { current_query: querySource },
-        contextDescription: { text: 'Current query', icon: <QueryTypeIcon /> },
-        callback: (
-            toolOutput: AssistantTrendsQuery | AssistantFunnelsQuery | AssistantRetentionQuery | AssistantHogQLQuery
-        ) => {
-            const source = castAssistantQuery(toolOutput)
-            if (!source) {
-                return
-            }
-            let node: QuerySchema
-            if (isHogQLQuery(source)) {
-                node = { kind: NodeKind.DataVisualizationNode, source } satisfies DataVisualizationNode
-            } else if (isInsightQueryNode(source)) {
-                node = { kind: NodeKind.InsightVizNode, source } satisfies InsightVizNode
-            } else {
-                node = source
-            }
-            handleInsightSuggested(node)
-            setQuery(node)
-        },
-        initialMaxPrompt: 'Show me users who ',
-        active: maxToolActive,
-    }
-
-    const filterContent = (
-        <div
-            className={clsx(
-                '@container/editor',
-                editorPanelsEnabled ? 'flex flex-col gap-3' : 'flex flex-row flex-wrap gap-8 bg-surface-primary',
-                { 'p-4 rounded border': !embedded && !editorPanelsEnabled }
-            )}
-        >
-            {filterGroupsGroups.map(({ title, editorFilterGroups }) => (
-                <div
-                    key={title}
-                    className={clsx(
-                        'flex flex-col max-w-full',
-                        editorPanelsEnabled ? 'gap-3' : 'gap-4 grow shrink basis-[28rem]'
-                    )}
-                >
-                    {editorFilterGroups.map((editorFilterGroup) => (
-                        <EditorFilterGroup
-                            key={editorFilterGroup.title}
-                            editorFilterGroup={editorFilterGroup}
-                            insightProps={insightProps}
-                            query={query}
-                            asTile={editorPanelsEnabled}
-                        />
-                    ))}
-                </div>
-            ))}
-        </div>
-    )
-
     if (!editorPanelsEnabled) {
         return (
             <EditorFiltersShell query={query} showing={showing} embedded={embedded}>
@@ -532,36 +437,19 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
     }
 
     return (
-        <div
-            ref={panelRef}
-            className={clsx(
-                'EditorFiltersWrapper relative self-stretch @container/editor-panel',
-                isResizing ? '' : 'transition-all duration-300 ease-out',
-                showing ? 'opacity-100' : 'w-0 min-w-0 max-w-0 opacity-0 overflow-hidden border-0 !p-0'
-            )}
-            style={
-                showing && panelWidth
-                    ? { width: panelWidth, minWidth: 320, maxWidth: 600 }
-                    : showing
-                      ? { width: 'max(min(30%, 600px), 420px)', minWidth: 320, maxWidth: 600 }
-                      : undefined
-            }
-        >
-            {showing && <Resizer {...resizerProps} />}
-            <MaxTool {...maxToolProps} className="h-full [&_button.absolute]:!-top-1 [&_button.absolute]:!-right-1">
-                <div className={clsx('h-full overflow-y-auto', showing && 'px-3 pt-2 pb-4')}>
-                    {shouldShowSessionAnalysisWarning ? <SessionAnalysisWarning /> : null}
-                    {filterContent}
-                    {previousQuery && (
-                        <SuggestionBanner
-                            previousQuery={previousQuery}
-                            suggestedQuery={suggestedQuery}
-                            onReject={onRejectSuggestedInsight}
-                        />
-                    )}
-                </div>
-            </MaxTool>
-        </div>
+        <InsightEditorPanel query={query} showing={showing} embedded={embedded}>
+            <div className="flex flex-col gap-3">
+                {filterGroupsGroups[0].editorFilterGroups.map((editorFilterGroup) => (
+                    <EditorFilterGroup
+                        key={editorFilterGroup.title}
+                        editorFilterGroup={editorFilterGroup}
+                        insightProps={insightProps}
+                        query={query}
+                        asTile
+                    />
+                ))}
+            </div>
+        </InsightEditorPanel>
     )
 }
 
