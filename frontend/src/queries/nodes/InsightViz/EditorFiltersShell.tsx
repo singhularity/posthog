@@ -69,26 +69,10 @@ export function EditorFiltersShell({
         }
     }, [asPanels, showing]) // oxlint-disable-line react-hooks/exhaustive-deps
 
-    const QueryTypeIcon = QUERY_TYPES_METADATA[query.kind].icon
+    // MaxTool should not be active when insights are embedded (e.g., in notebooks)
+    const maxToolActive = !embedded
 
-    const maxToolCallback = (
-        toolOutput: AssistantTrendsQuery | AssistantFunnelsQuery | AssistantRetentionQuery | AssistantHogQLQuery
-    ): void => {
-        const source = castAssistantQuery(toolOutput)
-        if (!source) {
-            return
-        }
-        let node: QuerySchema
-        if (isHogQLQuery(source)) {
-            node = { kind: NodeKind.DataVisualizationNode, source } satisfies DataVisualizationNode
-        } else if (isInsightQueryNode(source)) {
-            node = { kind: NodeKind.InsightVizNode, source } satisfies InsightVizNode
-        } else {
-            node = source
-        }
-        handleInsightSuggested(node)
-        setQuery(node)
-    }
+    const QueryTypeIcon = QUERY_TYPES_METADATA[query.kind].icon
 
     if (asPanels) {
         return (
@@ -112,10 +96,31 @@ export function EditorFiltersShell({
                     identifier="create_insight"
                     context={{ current_query: querySource }}
                     contextDescription={{ text: 'Current query', icon: <QueryTypeIcon /> }}
-                    callback={maxToolCallback}
+                    callback={(
+                        toolOutput:
+                            | AssistantTrendsQuery
+                            | AssistantFunnelsQuery
+                            | AssistantRetentionQuery
+                            | AssistantHogQLQuery
+                    ) => {
+                        const source = castAssistantQuery(toolOutput)
+                        if (!source) {
+                            return
+                        }
+                        let node: QuerySchema
+                        if (isHogQLQuery(source)) {
+                            node = { kind: NodeKind.DataVisualizationNode, source } satisfies DataVisualizationNode
+                        } else if (isInsightQueryNode(source)) {
+                            node = { kind: NodeKind.InsightVizNode, source } satisfies InsightVizNode
+                        } else {
+                            node = source
+                        }
+                        handleInsightSuggested(node)
+                        setQuery(node)
+                    }}
                     initialMaxPrompt="Show me users who "
                     className="h-full [&_button.absolute]:!-top-1 [&_button.absolute]:!-right-1"
-                    active={!embedded}
+                    active={maxToolActive}
                 >
                     <div className={clsx('h-full overflow-y-auto', showing && 'px-3 pt-2 pb-4')}>
                         {shouldShowSessionAnalysisWarning ? <SessionAnalysisWarning /> : null}
@@ -141,12 +146,43 @@ export function EditorFiltersShell({
                 <div>
                     <MaxTool
                         identifier="create_insight"
-                        context={{ current_query: querySource }}
-                        contextDescription={{ text: 'Current query', icon: <QueryTypeIcon /> }}
-                        callback={maxToolCallback}
+                        context={{
+                            current_query: querySource,
+                        }}
+                        contextDescription={{
+                            text: 'Current query',
+                            icon: <QueryTypeIcon />,
+                        }}
+                        callback={(
+                            toolOutput:
+                                | AssistantTrendsQuery
+                                | AssistantFunnelsQuery
+                                | AssistantRetentionQuery
+                                | AssistantHogQLQuery
+                        ) => {
+                            const source = castAssistantQuery(toolOutput)
+                            if (!source) {
+                                return
+                            }
+
+                            let node: QuerySchema
+                            if (isHogQLQuery(source)) {
+                                node = {
+                                    kind: NodeKind.DataVisualizationNode,
+                                    source,
+                                } satisfies DataVisualizationNode
+                            } else if (isInsightQueryNode(source)) {
+                                node = { kind: NodeKind.InsightVizNode, source } satisfies InsightVizNode
+                            } else {
+                                node = source
+                            }
+
+                            handleInsightSuggested(node)
+                            setQuery(node)
+                        }}
                         initialMaxPrompt="Show me users who "
                         className="EditorFiltersWrapper__max-tool"
-                        active={!embedded}
+                        active={maxToolActive}
                     >
                         <div
                             className={clsx('@container/editor flex flex-row flex-wrap gap-8 bg-surface-primary', {
