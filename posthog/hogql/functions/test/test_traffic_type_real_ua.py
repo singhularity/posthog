@@ -1,4 +1,5 @@
 import re
+from uuid import uuid4
 
 import pytest
 from posthog.test.base import BaseTest, _create_event, flush_persons_and_events
@@ -78,14 +79,30 @@ class TestBotClassificationRealUA:
 
 
 class TestTrafficTypeIntegration(BaseTest):
+    def _create_tagged_event(self, tag: str, **kwargs):
+        props = kwargs.pop("properties", {})
+        props["_test_tag"] = tag
+        _create_event(properties=props, **kwargs)
+
+    def _query_tagged(self, select: str, tag: str, extra_where: str = ""):
+        where = f"properties._test_tag = '{tag}'"
+        if extra_where:
+            where += f" AND {extra_where}"
+        return execute_hogql_query(
+            f"SELECT {select} FROM events WHERE {where} ORDER BY properties.$user_agent",
+            self.team,
+        )
+
     def test_all_real_ua_classify_correctly(self):
+        tag = uuid4().hex
         all_cases = []
         for category, ua_list in BOT_USER_AGENTS.items():
             for ua in ua_list:
                 all_cases.append((ua, category))
 
         for i, (ua, _category) in enumerate(all_cases):
-            _create_event(
+            self._create_tagged_event(
+                tag=tag,
                 distinct_id=f"ua-{i}",
                 event="test_bulk_classify",
                 team=self.team,
@@ -93,19 +110,15 @@ class TestTrafficTypeIntegration(BaseTest):
             )
         flush_persons_and_events()
 
-        response = execute_hogql_query(
+        response = self._query_tagged(
             """
-            SELECT
                 properties.$user_agent as ua,
                 __preview_isBot(properties.$user_agent) as is_bot,
                 __preview_getTrafficType(properties.$user_agent) as traffic_type,
                 __preview_getTrafficCategory(properties.$user_agent) as category,
                 __preview_getBotName(properties.$user_agent) as bot_name
-            FROM events
-            WHERE event = 'test_bulk_classify'
-            ORDER BY ua
             """,
-            self.team,
+            tag,
         )
 
         results_by_ua = {row[0]: row for row in response.results}
@@ -130,7 +143,9 @@ class TestTrafficTypeIntegration(BaseTest):
                 assert bot_name == "", f"bot_name should be empty for regular UA: {ua[:60]}"
 
     def test_virt_properties_with_raw_user_agent(self):
-        _create_event(
+        tag = uuid4().hex
+        self._create_tagged_event(
+            tag=tag,
             distinct_id="raw-ua",
             event="test_raw_ua",
             team=self.team,
@@ -138,12 +153,8 @@ class TestTrafficTypeIntegration(BaseTest):
         )
         flush_persons_and_events()
 
-        response = execute_hogql_query(
-            """
-            SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`
-            FROM events WHERE event = 'test_raw_ua'
-            """,
-            self.team,
+        response = self._query_tagged(
+            "`$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`", tag
         )
         assert len(response.results) == 1
         is_bot, traffic_type, category, bot_name = response.results[0]
@@ -153,7 +164,9 @@ class TestTrafficTypeIntegration(BaseTest):
         assert bot_name == "Googlebot"
 
     def test_virt_properties_with_user_agent_fallback(self):
-        _create_event(
+        tag = uuid4().hex
+        self._create_tagged_event(
+            tag=tag,
             distinct_id="fallback-ua",
             event="test_ua_fallback",
             team=self.team,
@@ -161,12 +174,8 @@ class TestTrafficTypeIntegration(BaseTest):
         )
         flush_persons_and_events()
 
-        response = execute_hogql_query(
-            """
-            SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`
-            FROM events WHERE event = 'test_ua_fallback'
-            """,
-            self.team,
+        response = self._query_tagged(
+            "`$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`", tag
         )
         assert len(response.results) == 1
         is_bot, traffic_type, category, bot_name = response.results[0]
@@ -176,24 +185,17 @@ class TestTrafficTypeIntegration(BaseTest):
         assert bot_name == "curl"
 
     def test_virt_properties_raw_ua_takes_precedence(self):
-        _create_event(
+        tag = uuid4().hex
+        self._create_tagged_event(
+            tag=tag,
             distinct_id="both-ua",
             event="test_raw_precedence",
             team=self.team,
-            properties={
-                "$raw_user_agent": "GPTBot/1.0",
-                "$user_agent": "Mozilla/5.0 Chrome/120.0",
-            },
+            properties={"$raw_user_agent": "GPTBot/1.0", "$user_agent": "Mozilla/5.0 Chrome/120.0"},
         )
         flush_persons_and_events()
 
-        response = execute_hogql_query(
-            """
-            SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_bot_name`
-            FROM events WHERE event = 'test_raw_precedence'
-            """,
-            self.team,
-        )
+        response = self._query_tagged("`$virt_is_bot`, `$virt_traffic_type`, `$virt_bot_name`", tag)
         assert len(response.results) == 1
         is_bot, traffic_type, bot_name = response.results[0]
         assert is_bot is True
@@ -201,20 +203,12 @@ class TestTrafficTypeIntegration(BaseTest):
         assert bot_name == "GPTBot"
 
     def test_virt_properties_null_user_agent(self):
-        _create_event(
-            distinct_id="no-ua",
-            event="test_null_ua",
-            team=self.team,
-            properties={},
-        )
+        tag = uuid4().hex
+        self._create_tagged_event(tag=tag, distinct_id="no-ua", event="test_null_ua", team=self.team, properties={})
         flush_persons_and_events()
 
-        response = execute_hogql_query(
-            """
-            SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`
-            FROM events WHERE event = 'test_null_ua'
-            """,
-            self.team,
+        response = self._query_tagged(
+            "`$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`", tag
         )
         assert len(response.results) == 1
         is_bot, traffic_type, category, bot_name = response.results[0]
@@ -224,7 +218,9 @@ class TestTrafficTypeIntegration(BaseTest):
         assert bot_name == ""
 
     def test_virt_properties_empty_user_agent(self):
-        _create_event(
+        tag = uuid4().hex
+        self._create_tagged_event(
+            tag=tag,
             distinct_id="empty-ua",
             event="test_empty_ua",
             team=self.team,
@@ -232,13 +228,7 @@ class TestTrafficTypeIntegration(BaseTest):
         )
         flush_persons_and_events()
 
-        response = execute_hogql_query(
-            """
-            SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`
-            FROM events WHERE event = 'test_empty_ua'
-            """,
-            self.team,
-        )
+        response = self._query_tagged("`$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`", tag)
         assert len(response.results) == 1
         is_bot, traffic_type, category = response.results[0]
         assert is_bot is True
@@ -246,6 +236,7 @@ class TestTrafficTypeIntegration(BaseTest):
         assert category == "no_user_agent"
 
     def test_filter_by_virt_is_bot(self):
+        tag = uuid4().hex
         bot_uas = ["Googlebot/2.1", "curl/8.0", "GPTBot/1.0"]
         regular_uas = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
@@ -253,7 +244,8 @@ class TestTrafficTypeIntegration(BaseTest):
         ]
 
         for i, ua in enumerate(bot_uas + regular_uas):
-            _create_event(
+            self._create_tagged_event(
+                tag=tag,
                 distinct_id=f"filter-{i}",
                 event="test_bot_filter",
                 team=self.team,
@@ -261,21 +253,14 @@ class TestTrafficTypeIntegration(BaseTest):
             )
         flush_persons_and_events()
 
-        response = execute_hogql_query(
-            """
-            SELECT properties.$user_agent as ua
-            FROM events
-            WHERE event = 'test_bot_filter' AND NOT `$virt_is_bot`
-            ORDER BY ua
-            """,
-            self.team,
-        )
+        response = self._query_tagged("properties.$user_agent as ua", tag, extra_where="NOT `$virt_is_bot`")
         result_uas = [row[0] for row in response.results]
         assert len(result_uas) == len(regular_uas)
         for ua in regular_uas:
             assert ua in result_uas, f"Regular UA should pass bot filter: {ua[:50]}"
 
     def test_group_by_virt_traffic_type(self):
+        tag = uuid4().hex
         test_uas = {
             "AI Agent": "GPTBot/1.0",
             "Bot": "Googlebot/2.1",
@@ -284,7 +269,8 @@ class TestTrafficTypeIntegration(BaseTest):
         }
 
         for i, (_traffic_type, ua) in enumerate(test_uas.items()):
-            _create_event(
+            self._create_tagged_event(
+                tag=tag,
                 distinct_id=f"group-{i}",
                 event="test_group_type",
                 team=self.team,
@@ -293,10 +279,10 @@ class TestTrafficTypeIntegration(BaseTest):
         flush_persons_and_events()
 
         response = execute_hogql_query(
-            """
+            f"""
             SELECT `$virt_traffic_type` as traffic_type, count() as cnt
             FROM events
-            WHERE event = 'test_group_type'
+            WHERE properties._test_tag = '{tag}'
             GROUP BY traffic_type
             ORDER BY traffic_type
             """,
@@ -306,7 +292,9 @@ class TestTrafficTypeIntegration(BaseTest):
         assert results == {"AI Agent": 1, "Automation": 1, "Bot": 1, "Regular": 1}
 
     def test_http_access_log_event(self):
-        _create_event(
+        tag = uuid4().hex
+        self._create_tagged_event(
+            tag=tag,
             distinct_id="http-log",
             event="http_request",
             team=self.team,
@@ -319,12 +307,8 @@ class TestTrafficTypeIntegration(BaseTest):
         )
         flush_persons_and_events()
 
-        response = execute_hogql_query(
-            """
-            SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`
-            FROM events WHERE event = 'http_request'
-            """,
-            self.team,
+        response = self._query_tagged(
+            "`$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`", tag
         )
         assert len(response.results) == 1
         is_bot, traffic_type, category, bot_name = response.results[0]
@@ -340,18 +324,15 @@ class TestVirtualPropertiesWithCustomEvents(BaseTest):
         ["$pageview", "$pageleave", "$autocapture", "custom_event", "http_request", "api_call"],
     )
     def test_virt_properties_work_across_event_types(self, event_name: str):
-        _create_event(
-            distinct_id="cross-event",
-            event=event_name,
-            team=self.team,
-            properties={"$user_agent": "Googlebot/2.1"},
-        )
+        tag = uuid4().hex
+        props: dict = {"$user_agent": "Googlebot/2.1", "_test_tag": tag}
+        _create_event(distinct_id="cross-event", event=event_name, team=self.team, properties=props)
         flush_persons_and_events()
 
         response = execute_hogql_query(
             f"""
             SELECT `$virt_is_bot`, `$virt_traffic_type`
-            FROM events WHERE event = '{event_name}'
+            FROM events WHERE properties._test_tag = '{tag}'
             """,
             self.team,
         )
