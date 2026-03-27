@@ -1102,53 +1102,47 @@ class TestProperty(BaseTest):
         assert map_virtual_properties(ast.Field(chain=["properties", 42])) == ast.Field(chain=["properties", 42])
 
     def test_virtual_event_properties_on_event_scope(self):
-        assert self._property_to_expr(
-            {"type": "event", "key": "$virt_traffic_type", "value": "Bot"}, scope="event"
-        ) == self._parse_expr("$virt_traffic_type = 'Bot'")
-
-        assert self._property_to_expr(
-            {"type": "event", "key": "$virt_traffic_type", "value": "AI Agent"}, scope="event"
-        ) == self._parse_expr("$virt_traffic_type = 'AI Agent'")
-
-        assert self._property_to_expr(
-            {"type": "event", "key": "$virt_bot_name", "value": "Googlebot"}, scope="event"
-        ) == self._parse_expr("$virt_bot_name = 'Googlebot'")
+        cases = [
+            ({"type": "event", "key": "$virt_traffic_type", "value": "Bot"}, "$virt_traffic_type = 'Bot'"),
+            ({"type": "event", "key": "$virt_traffic_type", "value": "AI Agent"}, "$virt_traffic_type = 'AI Agent'"),
+            ({"type": "event", "key": "$virt_bot_name", "value": "Googlebot"}, "$virt_bot_name = 'Googlebot'"),
+        ]
+        for prop_dict, expected_expr in cases:
+            assert self._property_to_expr(prop_dict, scope="event") == self._parse_expr(expected_expr), (
+                f"Failed for {prop_dict['key']}={prop_dict.get('value')}"
+            )
 
     def test_virtual_event_properties_with_operators(self):
-        assert self._property_to_expr(
-            {"type": "event", "key": "$virt_traffic_type", "value": "Bot", "operator": "is_not"}, scope="event"
-        ) == self._parse_expr("$virt_traffic_type != 'Bot'")
-
-        assert self._property_to_expr(
-            {"type": "event", "key": "$virt_bot_name", "value": "Google", "operator": "icontains"}, scope="event"
-        ) == self._parse_expr("toString($virt_bot_name) ilike '%Google%'")
-
-        assert self._property_to_expr(
-            {"type": "event", "key": "$virt_traffic_type", "operator": "is_set"}, scope="event"
-        ) == self._parse_expr("$virt_traffic_type != NULL")
+        cases = [
+            (
+                {"type": "event", "key": "$virt_traffic_type", "value": "Bot", "operator": "is_not"},
+                "$virt_traffic_type != 'Bot'",
+            ),
+            (
+                {"type": "event", "key": "$virt_bot_name", "value": "Google", "operator": "icontains"},
+                "toString($virt_bot_name) ilike '%Google%'",
+            ),
+            ({"type": "event", "key": "$virt_traffic_type", "operator": "is_set"}, "$virt_traffic_type != NULL"),
+        ]
+        for prop_dict, expected_expr in cases:
+            assert self._property_to_expr(prop_dict, scope="event") == self._parse_expr(expected_expr), (
+                f"Failed for {prop_dict['key']} operator={prop_dict.get('operator')}"
+            )
 
     def test_virtual_event_properties_boolean_filter(self):
         assert self._property_to_expr(
             {"type": "event", "key": "$virt_is_bot", "value": "true"}, scope="event"
-        ) == self._parse_expr("$virt_is_bot = 'true'")
+        ) == self._parse_expr("$virt_is_bot = true")
 
         assert self._property_to_expr(
             {"type": "event", "key": "$virt_is_bot", "value": "false"}, scope="event"
-        ) == self._parse_expr("$virt_is_bot = 'false'")
+        ) == self._parse_expr("$virt_is_bot = false")
 
     def test_map_virtual_properties_for_event_properties(self):
-        assert map_virtual_properties(ast.Field(chain=["properties", "$virt_is_bot"])) == ast.Field(
-            chain=["$virt_is_bot"]
-        )
-        assert map_virtual_properties(ast.Field(chain=["properties", "$virt_traffic_type"])) == ast.Field(
-            chain=["$virt_traffic_type"]
-        )
-        assert map_virtual_properties(ast.Field(chain=["properties", "$virt_bot_name"])) == ast.Field(
-            chain=["$virt_bot_name"]
-        )
-        assert map_virtual_properties(ast.Field(chain=["properties", "$virt_traffic_category"])) == ast.Field(
-            chain=["$virt_traffic_category"]
-        )
+        for virt_prop in ["$virt_is_bot", "$virt_traffic_type", "$virt_bot_name", "$virt_traffic_category"]:
+            assert map_virtual_properties(ast.Field(chain=["properties", virt_prop])) == ast.Field(chain=[virt_prop]), (
+                f"Failed for {virt_prop}"
+            )
 
     def test_property_to_expr_event_metadata_group_scope_basic(self):
         assert self._property_to_expr(
