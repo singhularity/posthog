@@ -54,7 +54,6 @@ import { HogFlowAction } from '../types'
 import { batchTriggerLogic, BLAST_RADIUS_LIMIT } from './batchTriggerLogic'
 import { HogFlowFunctionConfiguration } from './components/HogFlowFunctionConfiguration'
 import { RecurringSchedulePicker } from './components/RecurringSchedulePicker'
-import { scheduleLogic } from './scheduleLogic'
 
 type TriggerAction = Extract<HogFlowAction, { type: 'trigger' }>
 type EventTriggerConfig = {
@@ -580,11 +579,9 @@ function StepTriggerConfigurationBatch({
     action: Extract<HogFlowAction, { type: 'trigger' }>
     config: Extract<HogFlowAction['config'], { type: 'batch' }>
 }): JSX.Element {
-    const { partialSetWorkflowActionConfig } = useActions(workflowLogic)
-    const { workflow } = useValues(workflowLogic)
+    const { partialSetWorkflowActionConfig, setSchedule } = useActions(workflowLogic)
     const { featureFlags } = useValues(featureFlagLogic)
-    const { currentSchedule, saveStatus } = useValues(scheduleLogic({ workflowId: workflow.id }))
-    const { setDraftSchedule } = useActions(scheduleLogic({ workflowId: workflow.id }))
+    const { currentSchedule, pendingSchedule } = useValues(workflowLogic)
 
     return (
         <div className="flex flex-col gap-2 my-2 w-full">
@@ -629,16 +626,10 @@ function StepTriggerConfigurationBatch({
             {featureFlags[FEATURE_FLAGS.WORKFLOWS_RECURRING_SCHEDULES] && (
                 <>
                     <LemonDivider />
-                    <div className="flex items-center gap-2">
-                        <LemonLabel>Schedule</LemonLabel>
-                        {saveStatus === 'unsaved' && <span className="text-xs text-warning">Unsaved</span>}
-                        {saveStatus === 'saving' && <span className="text-xs text-muted">Saving...</span>}
-                        {saveStatus === 'saved' && <span className="text-xs text-success">Saved</span>}
-                        {saveStatus === 'error' && <span className="text-xs text-danger">Error saving</span>}
-                    </div>
+                    <LemonLabel>Schedule</LemonLabel>
                     <RecurringSchedulePicker
-                        schedule={currentSchedule ?? null}
-                        onChange={(schedule) => setDraftSchedule(schedule)}
+                        schedule={pendingSchedule !== undefined ? pendingSchedule : (currentSchedule ?? null)}
+                        onChange={(schedule) => setSchedule(schedule)}
                     />
                 </>
             )}

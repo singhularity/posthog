@@ -1,4 +1,4 @@
-import { actions, afterMount, connect, kea, key, listeners, path, props, selectors } from 'kea'
+import { actions, afterMount, connect, kea, key, listeners, path, props, reducers, selectors } from 'kea'
 import { DeepPartialMap, ValidationErrorType, forms } from 'kea-forms'
 import { lazyLoaders, loaders } from 'kea-loaders'
 import { router } from 'kea-router'
@@ -134,6 +134,8 @@ export const workflowLogic = kea<workflowLogicType>([
         setWorkflowActionEdges: (actionId: string, edges: HogFlow['edges']) => ({ actionId, edges }),
         // NOTE: This is a wrapper for setWorkflowValues, to get around some weird typegen issues
         setWorkflowInfo: (workflow: Partial<HogFlow>) => ({ workflow }),
+        setSchedule: (schedule: { rrule: string; starts_at: string; timezone?: string } | null) => ({ schedule }),
+        setSchedules: (schedules: any[]) => ({ schedules }),
         saveWorkflowPartial: (workflow: Partial<HogFlow>) => ({ workflow }),
         triggerManualWorkflow: (variables: Record<string, any>, scheduledAt?: string | null) => ({
             variables,
@@ -253,8 +255,28 @@ export const workflowLogic = kea<workflowLogicType>([
             },
         },
     })),
+    reducers({
+        schedules: [
+            [] as any[],
+            {
+                setSchedules: (_, { schedules }) => schedules,
+            },
+        ],
+        pendingSchedule: [
+            undefined as { rrule: string; starts_at: string; timezone?: string } | null | undefined,
+            {
+                setSchedule: (_, { schedule }) => schedule,
+                setSchedules: () => undefined,
+            },
+        ],
+    }),
     selectors({
         logicProps: [() => [(_, props: WorkflowLogicProps) => props], (props): WorkflowLogicProps => props],
+        currentSchedule: [
+            (s) => [s.schedules],
+            (schedules): { id?: string; rrule: string; starts_at: string; timezone?: string } | null =>
+                schedules[0] ?? null,
+        ],
         workflowLoading: [(s) => [s.originalWorkflowLoading], (originalWorkflowLoading) => originalWorkflowLoading],
         edgesByActionId: [
             (s) => [s.workflow],
@@ -434,8 +456,43 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         loadWorkflowSuccess: async ({ originalWorkflow }) => {
             actions.resetWorkflow(originalWorkflow)
+            if (originalWorkflow.id) {
+                try {
+                    const projectId = values.currentProjectId
+                    const response = await api.get(
+                        `api/projects/${projectId}/hog_flows/${originalWorkflow.id}/schedules/`
+                    )
+                    actions.setSchedules(response.results ?? response)
+                } catch {
+                    // Schedules are non-critical, don't block workflow loading
+                }
+            }
         },
         saveWorkflowSuccess: async ({ originalWorkflow }) => {
+            // Save pending schedule changes
+            if (values.pendingSchedule !== undefined && originalWorkflow.id) {
+                try {
+                    const projectId = values.currentProjectId
+                    const baseUrl = `api/projects/${projectId}/hog_flows/${originalWorkflow.id}/schedules/`
+                    const existing = values.currentSchedule
+
+                    if (values.pendingSchedule === null) {
+                        if (existing?.id) {
+                            await api.delete(`${baseUrl}${existing.id}/`)
+                        }
+                    } else if (existing?.id) {
+                        await api.update(`${baseUrl}${existing.id}/`, values.pendingSchedule)
+                    } else {
+                        await api.create(baseUrl, values.pendingSchedule)
+                    }
+
+                    const response = await api.get(baseUrl)
+                    actions.setSchedules(response.results ?? response)
+                } catch {
+                    lemonToast.error('Failed to save schedule')
+                }
+            }
+
             const tasksToMarkAsCompleted: SetupTaskId[] = []
             lemonToast.success('Workflow saved')
             if (props.id === 'new' && originalWorkflow.id) {
