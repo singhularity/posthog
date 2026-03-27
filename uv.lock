@@ -5030,6 +5030,7 @@ dependencies = [
     { name = "gspread" },
     { name = "hogql-parser" },
     { name = "infi-clickhouse-orm" },
+    { name = "jinja2" },
     { name = "jsonref" },
     { name = "kafka-python" },
     { name = "kombu" },
@@ -5101,6 +5102,7 @@ dependencies = [
     { name = "snowflake-connector-python" },
     { name = "social-auth-app-django" },
     { name = "social-auth-core" },
+    { name = "sqlglot" },
     { name = "sqlparse" },
     { name = "sshtunnel" },
     { name = "statshog" },
@@ -5286,6 +5288,7 @@ requires-dist = [
     { name = "gspread", specifier = "==6.2.1" },
     { name = "hogql-parser", specifier = "==1.3.35" },
     { name = "infi-clickhouse-orm", git = "https://github.com/PostHog/infi.clickhouse_orm?rev=4e3996becf66bf5c26580aff12a80425d9d56fe5" },
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "jsonref", specifier = "==1.1.0" },
     { name = "kafka-python", specifier = "==2.3.0" },
     { name = "kombu", specifier = "==5.3.7" },
@@ -5357,6 +5360,7 @@ requires-dist = [
     { name = "snowflake-connector-python", specifier = "==4.3.0" },
     { name = "social-auth-app-django", specifier = "~=5.4.3" },
     { name = "social-auth-core", specifier = "~=4.8.3" },
+    { name = "sqlglot", specifier = "~=26.0" },
     { name = "sqlparse", specifier = "==0.5.0" },
     { name = "sshtunnel", specifier = "==0.4.0" },
     { name = "statshog", specifier = "==1.0.6" },
@@ -7013,11 +7017,11 @@ wheels = [
 
 [[package]]
 name = "sqlglot"
-version = "28.5.0"
+version = "26.33.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/bf/8c/a4d24b6103305467506c1dea9c3ca8dc92773a91bae246c2517c256a0cf9/sqlglot-28.5.0.tar.gz", hash = "sha256:b3213b3e867dcc306074f1c90480aeee89a0e635cf0dfe70eb4a3af7b61972e6", size = 5652688, upload-time = "2025-12-17T23:38:00.121Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/9d/fcd59b4612d5ad1e2257c67c478107f073b19e1097d3bfde2fb517884416/sqlglot-26.33.0.tar.gz", hash = "sha256:2817278779fa51d6def43aa0d70690b93a25c83eb18ec97130fdaf707abc0d73", size = 5353340, upload-time = "2025-07-01T13:09:06.311Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ec/f7/6a7effd2526f64bcb0d2264c0dbebc7f8508add3f2c0748540d1448a24a3/sqlglot-28.5.0-py3-none-any.whl", hash = "sha256:5798bfdb6e9bc36c964e6c64d7222624d98b2631cc20f44628a82eba7cf7b4bf", size = 561086, upload-time = "2025-12-17T23:37:57.972Z" },
+    { url = "https://files.pythonhosted.org/packages/31/8d/f1d9cb5b18e06aa45689fbeaaea6ebab66d5f01d1e65029a8f7657c06be5/sqlglot-26.33.0-py3-none-any.whl", hash = "sha256:031cee20c0c796a83d26d079a47fdce667604df430598c7eabfa4e4dfd147033", size = 477610, upload-time = "2025-07-01T13:09:03.926Z" },
 ]
 
 [[package]]

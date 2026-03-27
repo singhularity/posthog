@@ -1,0 +1,62 @@
+# Multi-node ClickHouse cluster for local integration testing of ch_migrate.
+# NOT for CI — too heavyweight. Use for pre-production validation only.
+#
+# Usage:
+#   docker compose -f docker-compose.multi-node.yml up -d
+#   pytest posthog/clickhouse/test/test_multi_node_integration.py -v
+#   docker compose -f docker-compose.multi-node.yml down -v
+
+services:
+    zookeeper:
+        image: zookeeper:3.9
+        container_name: ch-test-zookeeper
+        ports:
+            - '2181:2181'
+        networks:
+            - ch-multi-node
+
+    clickhouse-1:
+        image: clickhouse/clickhouse-server:24.12.3.47
+        container_name: ch-test-node-1
+        hostname: clickhouse-1
+        ports:
+            - '9001:9000'
+            - '8124:8123'
+        depends_on:
+            - zookeeper
+        volumes:
+            - ./docker/multi-node/node1:/etc/clickhouse-server/config.d
+        networks:
+            - ch-multi-node
+
+    clickhouse-2:
+        image: clickhouse/clickhouse-server:24.12.3.47
+        container_name: ch-test-node-2
+        hostname: clickhouse-2
+        ports:
+            - '9002:9000'
+            - '8125:8123'
+        depends_on:
+            - zookeeper
+        volumes:
+            - ./docker/multi-node/node2:/etc/clickhouse-server/config.d
+        networks:
+            - ch-multi-node
+
+    clickhouse-3:
+        image: clickhouse/clickhouse-server:24.12.3.47
+        container_name: ch-test-node-3
+        hostname: clickhouse-3
+        ports:
+            - '9003:9000'
+            - '8126:8123'
+        depends_on:
+            - zookeeper
+        volumes:
+            - ./docker/multi-node/node3:/etc/clickhouse-server/config.d
+        networks:
+            - ch-multi-node
+
+networks:
+    ch-multi-node:
+        driver: bridge

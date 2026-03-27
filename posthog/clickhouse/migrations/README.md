@@ -1,109 +1,186 @@
-## Creating ClickHouse schema changes
+# ClickHouse migrations
 
-**Important:** ClickHouse schema changes should be created as a separate PR from application code changes. This allows for:
+This directory contains ClickHouse schema migrations for PostHog.
+There are two styles: legacy `.py` files and new-style directory migrations.
 
-- Independent review and testing of schema migrations
-- Safer rollout of database changes
-- Clear separation between infrastructure and application logic changes
+## New-style directory migrations
 
-## About migrations
+Each migration lives in a numbered directory
+(e.g. `NNNN_<name>/`) containing:
 
-Not all migrations are intended to run on all nodes every time, because of the topologies we run. Some nodes are intended to only perform compute operations and do not contain sharded tables.
+```text
+NNNN_<name>/
+  manifest.yaml   # declares steps, rollback, and metadata
+  up.sql           # SQL template(s) for the forward direction
+  down.sql         # SQL template(s) for rollback
+  __init__.py      # bridge for backward compatibility with the legacy runner
+```
 
-Some tables are meant to run only on a couple of nodes, like some Kafka tables, to prevent the whole cluster to run too many insertions in ClickHouse.
+### SQL templates
 
-And, in some other cases, we want to only create one table (like a unique Kafka consumer) in one node.
+SQL files are Jinja2 templates with access to these variables:
 
-Because of the above, take the following advice into consideration when manipulating schemas for ClickHouse.
+- `{{ database }}` -- the ClickHouse database name
+- `{{ cluster }}` -- the ClickHouse cluster name
+- `{{ single_shard_cluster }}` -- the single-shard cluster name (if configured)
 
-### When to run a migration ONLY on a data node
+A single `.sql` file can contain multiple named sections separated by
+`-- @section: <name>` comments.
+Steps reference a specific section with `up.sql#section_name`
+or the entire file with just `up.sql`.
 
-- When adding / updating a sharded data table
+## Creating a new migration
 
-In the above cases, create a migration and call the `run_sql_with_exceptions` function with the `node_roles` set to `[NodeRole.DATA]`.
+Use the management command:
 
-<details>
+```bash
+python manage.py create_ch_migration \
+  --name add_foo_column \
+  --type add-column \
+  --table events
+```
 
-<summary>Example</summary>
-For example, the `sharded_events` table is a sharded table. Thus, it should only be added on data nodes.
+This scaffolds a numbered directory with `manifest.yaml`, `up.sql`, `down.sql`,
+and an `__init__.py` bridge.
+It also updates `max_migration.txt`.
 
-Also, since to fill this table we need to consume events from Kafka, we need to run Kafka consumers on the data nodes, which would include the materialized view and the writable distributed table. So the `kafka_events_json`, `events_json_mv` and `writable_events` tables should also be added on them.
+## Manifest reference
 
-</details>
+```yaml
+description: 'Human-readable summary of the migration'
 
-### When to run a migration for DATA and COORDINATOR nodes
+# Optional: target a single ClickHouse cluster name
+cluster: posthog
 
-- Basically when the migration does not include any of the above listed in the previous section.
-- When adding / updating a distributed table for reading
-- When adding / updating a replicated table
-- When adding / updating a view
-- When adding / updating a dictionary
-- And so on
+# Optional: target multiple clusters (overrides `cluster`)
+clusters:
+  - us-east
+  - eu-west
 
-In the above cases, create a migration and call the `run_sql_with_exceptions` function with the `node_roles` set to `[NodeRole.DATA, NodeRole.COORDINATOR]`.
+steps:
+  - sql: 'up.sql#create_local'
+    node_roles: [DATA] # required: DATA, COORDINATOR, or both
+    comment: 'Create local table'
+    sharded: true # run on each shard (default: false)
+    is_alter_on_replicated_table: false # ALTER that replicates (default: false)
+    clusters: # per-step override of manifest-level clusters
+      - us-east
 
-<details>
+rollback:
+  - sql: 'down.sql'
+    node_roles: [DATA, COORDINATOR]
+```
 
-<summary>Example</summary>
+### Field details
 
-Following the previous section example, the sharded events table along with the Kafka tables, materialized views and writable distributed table would be added to the data nodes. However, the `distributed_events`, which is the table used for the read path, would be added to all nodes.
+| Field                          | Scope    | Required | Description                                    |
+| ------------------------------ | -------- | -------- | ---------------------------------------------- |
+| `description`                  | manifest | yes      | Human-readable summary                         |
+| `cluster`                      | manifest | no       | Single target cluster name                     |
+| `clusters`                     | manifest | no       | List of target clusters (overrides `cluster`)  |
+| `steps`                        | manifest | yes      | Ordered list of forward steps                  |
+| `rollback`                     | manifest | no       | Ordered list of rollback steps                 |
+| `sql`                          | step     | yes      | SQL file reference, optionally with `#section` |
+| `node_roles`                   | step     | yes      | `["DATA"]`, `["COORDINATOR"]`, or both         |
+| `comment`                      | step     | no       | Human-readable description of the step         |
+| `sharded`                      | step     | no       | Execute on each shard separately               |
+| `is_alter_on_replicated_table` | step     | no       | ALTERs that replicate across nodes             |
+| `clusters`                     | step     | no       | Per-step cluster override                      |
 
-</details>
+### Multi-cluster behavior
 
-## When to use NodeRole.INGESTION_SMALL or NodeRole.INGESTION_MEDIUM
+When `clusters` is set at the manifest or step level,
+the runner filters steps based on the current cluster identity.
 
-We have extra nodes with a sole purpose of ingesting the data from Kafka topics into ClickHouse tables. These nodes don't contain any data perse, only Kafka tables and Distributed ones, along with the materialized views that connect them.
+- **Step `clusters`** takes precedence over manifest `clusters`.
+- **Manifest `clusters`** takes precedence over manifest `cluster`.
+- When no cluster targeting is configured, every step runs everywhere.
 
-Use these node roles exclusively when you need to ingest data from Kafka into ClickHouse.
+Before applying migration N+1 in multi-cluster mode,
+`check_cross_cluster_ordering` verifies that migration N
+has been recorded as complete on all target clusters.
 
-When you want to pull data from Kafka into ClickHouse, you should:
+## `ch_migrate` commands
 
-1. Create a Kafka table.
-2. Create a writable table only on ingestion nodes. It should be a Distributed table with your data table.
-   1. If your data table is non-sharded, you should point it to one shard: `Distributed(..., cluster=settings.CLICKHOUSE_SINGLE_SHARD_CLUSTER)`, without using any sharding key.
-   2. If your data table is sharded, you should point it to all shards: `Distributed(..., cluster=settings.CLICKHOUSE_CLUSTER, sharding_key="...")`, using a sharding key.
-3. Create a materialized view between Kafka table and the writable table.
+All commands are run via Django management:
 
-Example PR for non-sharded table: https://github.com/PostHog/posthog/pull/38890/files
-Example PR for sharded table: https://github.com/PostHog/posthog/issues/38668/files
+```bash
+python manage.py ch_migrate <subcommand>
+```
 
-`Medium` tier contains 4 consumers, while `Small` tier contain just one. Depending on the throughput of the Kafka topic, you should choose the appropriate tier, in case of doubts choose `Small` and you can later upgrade to `Medium` if lag is too high.
+### `bootstrap`
 
-## When to use NodeRole.ALL
+Create the tracking table (`clickhouse_schema_migrations`) on all nodes.
+Run this once when setting up a new environment.
 
-We are introducing changes to our ClickHouse topology frequently, introducing new types of nodes.
+```bash
+python manage.py ch_migrate bootstrap
+```
 
-Rarely, you'll need to run a migration on all nodes. In that case, you can use the `NodeRole.ALL` role. You should only use it when you're sure that the change is safe to apply to all nodes.
+### `plan`
 
-In the vast majority of cases, just follow the [previous](#when-to-run-a-migration-only-on-a-data-node) [sections](#when-to-run-a-migration-for-data-and-coordinator-nodes).
+Show pending migrations without executing them.
 
-### The ON CLUSTER clause
+```bash
+python manage.py ch_migrate plan
+```
 
-**Do not use the `ON CLUSTER` clause**, since the DDL statement will be run on all nodes anyway through the `run_sql_with_exceptions` function, and, by default, the `ON CLUSTER` clause makes the DDL statement run on nodes specified for the default cluster, and that does not include the coordinator.
-This may cause lots of troubles and block migrations.
+### `apply`
 
-The `ON CLUSTER` clause is used to specify the cluster to run the DDL statement on. By default, the `posthog` cluster is used. That cluster only includes the data nodes.
+Apply pending migrations in order. Automatically checks for active mutations
+on target tables before applying (use `--skip-mutation-check` to bypass).
 
-### Testing
+```bash
+python manage.py ch_migrate apply [--upto N] [--skip-mutation-check] [--force]
+```
 
-To re-run a migration, you'll need to delete the entry from the `infi_clickhouse_orm_migrations` table.
+- `--upto N` -- apply migrations up to number N (inclusive)
+- `--skip-mutation-check` -- skip the automatic active mutation check
+- `--force` -- apply even if active mutations are found
 
-## Ingestion layer
+### `down`
 
-We have extra nodes with a sole purpose of ingesting the data from Kafka topics into ClickHouse tables. The way to do that is to:
+Roll back a specific migration by number.
 
-1. Create your data table in ClickHouse main cluster.
-2. Create a writable table only on ingestion nodes: `node_roles=[NodeRole.INGESTION_SMALL]`. It should be Distributed table with your data table. If your data table is non-sharded, you should point it to one shard: `Distributed(..., cluster=settings.CLICKHOUSE_SINGLE_SHARD_CLUSTER)`.
-3. Create a Kafka table in ingestion nodes: `node_roles=[NodeRole.INGESTION_SMALL]`.
-4. Create materialized view between Kafka table and writable table on ingestion nodes.
+```bash
+python manage.py ch_migrate down <migration_number>
+```
 
-Example PR for non-sharded table: https://github.com/PostHog/posthog/pull/38890/files
+### `validate`
 
-**How and why?**
+Run static analysis on a migration (checks for `ON CLUSTER`, rollback completeness,
+node role consistency, DROP statements, companion tables).
 
-Our main cluster (`posthog`) nodes were overwhelmed with ingestion and sometimes the query load
-was interfering with ingestion. This was causing delays and at the end incidents.
+```bash
+python manage.py ch_migrate validate <migration_number> [--strict]
+```
 
-We added new nodes that are not part of our regular cluster setup, we run them on Kubernetes.
+### `trial`
 
-ClickHouse cluster as defined in it is a logical concept and one may add nodes that are running in different places, this is how we created a new cluster that has all workers, coordinator and our new ingestion nodes.
+Sandbox validation: runs up, verifies schema, rolls back, verifies schema is restored.
+
+```bash
+python manage.py ch_migrate trial <migration_number>
+```
+
+### `status`
+
+Show per-host migration state (both legacy infi and new-style tracking tables).
+
+```bash
+python manage.py ch_migrate status [--node <hostname>]
+```
+
+## The `__init__.py` bridge
+
+Each new-style migration directory includes an `__init__.py`
+so the legacy `migrate_clickhouse` runner can discover it.
+The bridge file contains an empty `operations = []` list,
+which signals that the migration is handled by `ch_migrate` instead.
+
+## SQL linting
+
+<!-- TODO: add sqlfluff as a dev dependency (requires pyproject.toml + uv.lock changes)
+     and integrate into CI. Track in a separate commit. -->
+
+SQL linting with sqlfluff is planned but not yet integrated into CI.
