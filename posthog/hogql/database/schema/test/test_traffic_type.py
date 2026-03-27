@@ -85,6 +85,7 @@ class TestIsBotField:
         field = create_is_bot_field(name="$virt_is_bot")
         assert isinstance(field.expr, ast.CompareOperation)
         index_call = field.expr.left
+        assert isinstance(index_call, ast.Call)
         safe_ua = index_call.args[0]
         assert isinstance(safe_ua, ast.Call)
         assert safe_ua.name == "ifNull"
@@ -111,6 +112,7 @@ class TestTrafficTypeField:
         assert isinstance(field.expr, ast.Call)
         array_access = field.expr.args[2]
         assert isinstance(array_access, ast.ArrayAccess)
+        assert isinstance(array_access.array, ast.Array)
         labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
         assert "AI Agent" in labels
         assert "Bot" in labels
@@ -142,6 +144,8 @@ class TestTrafficCategoryField:
         field = create_traffic_category_field(name="$virt_traffic_category")
         assert isinstance(field.expr, ast.Call)
         array_access = field.expr.args[2]
+        assert isinstance(array_access, ast.ArrayAccess)
+        assert isinstance(array_access.array, ast.Array)
         labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
         assert "llm_crawler" in labels
         assert "search_crawler" in labels
@@ -170,6 +174,8 @@ class TestBotNameField:
         field = create_bot_name_field(name="$virt_bot_name")
         assert isinstance(field.expr, ast.Call)
         array_access = field.expr.args[2]
+        assert isinstance(array_access, ast.ArrayAccess)
+        assert isinstance(array_access.array, ast.Array)
         labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
         assert "Googlebot" in labels
         assert "ChatGPT" in labels
