@@ -83,8 +83,9 @@ class TestIsBotField:
 
     def test_wraps_user_agent_in_ifnull(self):
         field = create_is_bot_field(name="$virt_is_bot")
-        assert isinstance(field.expr, ast.CompareOperation)
-        index_call = field.expr.left
+        expr = field.expr
+        assert isinstance(expr, ast.CompareOperation)
+        index_call = expr.left
         assert isinstance(index_call, ast.Call)
         safe_ua = index_call.args[0]
         assert isinstance(safe_ua, ast.Call)
@@ -108,12 +109,13 @@ class TestTrafficTypeField:
         assert default.value == "Regular"
 
     def test_labels_contain_expected_values(self):
-        field = create_traffic_type_field(name="$virt_traffic_type")
-        assert isinstance(field.expr, ast.Call)
-        array_access = field.expr.args[2]
+        expr = create_traffic_type_field(name="$virt_traffic_type").expr
+        assert isinstance(expr, ast.Call)
+        array_access = expr.args[2]
         assert isinstance(array_access, ast.ArrayAccess)
-        assert isinstance(array_access.array, ast.Array)
-        labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
+        labels_array = array_access.array
+        assert isinstance(labels_array, ast.Array)
+        labels = [e.value for e in labels_array.exprs if isinstance(e, ast.Constant)]
         assert "AI Agent" in labels
         assert "Bot" in labels
         assert "Automation" in labels
@@ -141,12 +143,13 @@ class TestTrafficCategoryField:
         assert default.value == "regular"
 
     def test_labels_contain_expected_categories(self):
-        field = create_traffic_category_field(name="$virt_traffic_category")
-        assert isinstance(field.expr, ast.Call)
-        array_access = field.expr.args[2]
+        expr = create_traffic_category_field(name="$virt_traffic_category").expr
+        assert isinstance(expr, ast.Call)
+        array_access = expr.args[2]
         assert isinstance(array_access, ast.ArrayAccess)
-        assert isinstance(array_access.array, ast.Array)
-        labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
+        labels_array = array_access.array
+        assert isinstance(labels_array, ast.Array)
+        labels = [e.value for e in labels_array.exprs if isinstance(e, ast.Constant)]
         assert "llm_crawler" in labels
         assert "search_crawler" in labels
         assert "seo_crawler" in labels
@@ -171,12 +174,13 @@ class TestBotNameField:
         assert default.value == ""
 
     def test_labels_contain_expected_bot_names(self):
-        field = create_bot_name_field(name="$virt_bot_name")
-        assert isinstance(field.expr, ast.Call)
-        array_access = field.expr.args[2]
+        expr = create_bot_name_field(name="$virt_bot_name").expr
+        assert isinstance(expr, ast.Call)
+        array_access = expr.args[2]
         assert isinstance(array_access, ast.ArrayAccess)
-        assert isinstance(array_access.array, ast.Array)
-        labels = [e.value for e in array_access.array.exprs if isinstance(e, ast.Constant)]
+        labels_array = array_access.array
+        assert isinstance(labels_array, ast.Array)
+        labels = [e.value for e in labels_array.exprs if isinstance(e, ast.Constant)]
         assert "Googlebot" in labels
         assert "ChatGPT" in labels
         assert "Claude" in labels
