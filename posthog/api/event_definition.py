@@ -191,7 +191,18 @@ class EventDefinitionSerializer(TaggedItemSerializerMixin, serializers.ModelSeri
         return hasattr(obj, "action_id") and obj.action_id is not None
 
 
-@extend_schema(tags=["core"])
+@extend_schema(
+    tags=["core"],
+    parameters=[
+        OpenApiParameter(
+            "verified",
+            OpenApiTypes.BOOL,
+            description="Filter by verified status. True returns only verified, false returns only unverified.",
+            required=False,
+            location=OpenApiParameter.QUERY,
+        ),
+    ],
+)
 class EventDefinitionViewSet(
     TeamAndOrgViewSetMixin,
     TaggedItemViewSetMixin,

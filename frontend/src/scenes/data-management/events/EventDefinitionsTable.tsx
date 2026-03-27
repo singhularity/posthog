@@ -13,6 +13,7 @@ import { EVENT_DEFINITIONS_PER_PAGE } from 'lib/constants'
 import { LemonBanner } from 'lib/lemon-ui/LemonBanner'
 import { LemonTable, LemonTableColumn, LemonTableColumns } from 'lib/lemon-ui/LemonTable'
 import { cn } from 'lib/utils/css-classes'
+import { verifiedOptions } from 'scenes/data-management/constants'
 import { DefinitionHeader, getEventDefinitionIcon } from 'scenes/data-management/events/DefinitionHeader'
 import { EventDefinitionModal } from 'scenes/data-management/events/EventDefinitionModal'
 import { EventDefinitionProperties } from 'scenes/data-management/events/EventDefinitionProperties'
@@ -37,12 +38,6 @@ const eventTypeOptions: LemonSelectOptions<EventDefinitionType> = [
         label: 'PostHog events',
         'data-attr': 'event-type-option-event-posthog',
     },
-]
-
-const verifiedOptions: LemonSelectOptions<string> = [
-    { value: '', label: 'Any status' },
-    { value: 'true', label: 'Verified only' },
-    { value: 'false', label: 'Unverified only' },
 ]
 
 export function EventDefinitionsTable(): JSX.Element {

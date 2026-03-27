@@ -11,6 +11,7 @@ import { EVENT_PROPERTY_DEFINITIONS_PER_PAGE } from 'lib/constants'
 import { LemonBanner } from 'lib/lemon-ui/LemonBanner'
 import { LemonTable, LemonTableColumn, LemonTableColumns } from 'lib/lemon-ui/LemonTable'
 import { cn } from 'lib/utils/css-classes'
+import { verifiedOptions } from 'scenes/data-management/constants'
 import { DefinitionHeader, getPropertyDefinitionIcon } from 'scenes/data-management/events/DefinitionHeader'
 import { propertyDefinitionsTableLogic } from 'scenes/data-management/properties/propertyDefinitionsTableLogic'
 import { sceneConfigurations } from 'scenes/scenes'
@@ -20,12 +21,6 @@ import { urls } from 'scenes/urls'
 import { SceneContent } from '~/layout/scenes/components/SceneContent'
 import { SceneTitleSection } from '~/layout/scenes/components/SceneTitleSection'
 import { PropertyDefinition } from '~/types'
-
-const verifiedOptions: LemonSelectOptions<string> = [
-    { value: '', label: 'Any status' },
-    { value: 'true', label: 'Verified only' },
-    { value: 'false', label: 'Unverified only' },
-]
 
 const propertyNameTypeOptions: LemonSelectOptions<string> = [
     { value: '', label: 'All properties' },

@@ -137,6 +137,15 @@ class PropertyDefinitionQuerySerializer(serializers.Serializer):
         if type_ != "event" and attrs.get("event_names"):
             raise ValidationError("`event_names` can only be set for `event` type")
 
+        tags = attrs.get("tags")
+        if tags is not None:
+            try:
+                parsed = json.loads(tags)
+                if not isinstance(parsed, list) or not all(isinstance(t, str) for t in parsed):
+                    raise ValidationError("`tags` must be a JSON-encoded list of strings")
+            except (json.JSONDecodeError, TypeError):
+                raise ValidationError("`tags` must be valid JSON")
+
         return super().validate(attrs)
 
 
@@ -335,41 +344,34 @@ class QueryContext:
 
     def with_hidden_filter(self, exclude_hidden: bool, use_enterprise_taxonomy: bool) -> Self:
         if exclude_hidden and use_enterprise_taxonomy:
-            hidden_filter = " AND (hidden IS NULL OR hidden = false)"
             return dataclasses.replace(
                 self,
-                extra_where_conditions=(
-                    self.extra_where_conditions + hidden_filter if self.extra_where_conditions else hidden_filter
-                ),
+                extra_where_conditions=self.extra_where_conditions + " AND (hidden IS NULL OR hidden = false)",
             )
         return self
 
     def with_verified_filter(self, verified: Optional[bool], use_enterprise_taxonomy: bool) -> Self:
         if verified is not None and use_enterprise_taxonomy:
             if verified:
-                verified_filter = " AND verified = true"
+                condition = " AND verified = true"
             else:
-                verified_filter = " AND (verified IS NULL OR verified = false)"
+                condition = " AND (verified IS NULL OR verified = false)"
             return dataclasses.replace(
                 self,
-                extra_where_conditions=(
-                    self.extra_where_conditions + verified_filter if self.extra_where_conditions else verified_filter
-                ),
+                extra_where_conditions=self.extra_where_conditions + condition,
             )
         return self
 
     def with_property_name_type_filter(self, property_name_type: str) -> Self:
         if property_name_type == "posthog":
-            name_type_filter = f" AND {self.property_definition_table}.name LIKE '$%%'"
+            condition = f" AND {self.property_definition_table}.name LIKE '$%%'"
         elif property_name_type == "custom":
-            name_type_filter = f" AND {self.property_definition_table}.name NOT LIKE '$%%'"
+            condition = f" AND {self.property_definition_table}.name NOT LIKE '$%%'"
         else:
             return self
         return dataclasses.replace(
             self,
-            extra_where_conditions=(
-                self.extra_where_conditions + name_type_filter if self.extra_where_conditions else name_type_filter
-            ),
+            extra_where_conditions=self.extra_where_conditions + condition,
         )
 
     def with_tags_filter(self, tags_list: list[str]) -> Self:
@@ -381,11 +383,7 @@ class QueryContext:
                 f"INNER JOIN posthog_taggeditem ON posthog_taggeditem.property_definition_id = {self.property_definition_table}.id"
                 " INNER JOIN posthog_tag ON posthog_tag.id = posthog_taggeditem.tag_id"
             ),
-            extra_where_conditions=(
-                self.extra_where_conditions + " AND posthog_tag.name = ANY(%(tags_list)s)"
-                if self.extra_where_conditions
-                else " AND posthog_tag.name = ANY(%(tags_list)s)"
-            ),
+            extra_where_conditions=self.extra_where_conditions + " AND posthog_tag.name = ANY(%(tags_list)s)",
             params={**self.params, "tags_list": tags_list},
         )
 
@@ -756,11 +754,7 @@ class PropertyDefinitionViewSet(
     def _parse_tags(tags: Optional[str]) -> list[str]:
         if not tags:
             return []
-        try:
-            parsed = json.loads(tags)
-            return parsed if isinstance(parsed, list) else []
-        except (json.JSONDecodeError, TypeError):
-            return []
+        return json.loads(tags)
 
     def get_serializer_class(self) -> type[serializers.ModelSerializer]:
         serializer_class: type[serializers.ModelSerializer] = self.serializer_class
