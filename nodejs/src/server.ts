@@ -21,6 +21,7 @@ import {
     createHogTransformerService,
 } from './cdp/hog-transformations/hog-transformer.service'
 import { CyclotronV2JanitorService } from './cdp/services/cyclotron-v2'
+import { HogFlowScheduleService } from './cdp/services/hogflow-schedule/hogflow-schedule.service'
 import { EncryptedFields } from './cdp/utils/encryption-utils'
 import { defaultConfig } from './config/config'
 import { createIngestionRedisConnectionConfig, createPosthogRedisConnectionConfig } from './config/redis-pools'
@@ -272,9 +273,6 @@ export class PluginServer implements NodeServer {
 
         if (capabilities.cdpHogflowScheduler) {
             serviceLoaders.push(async () => {
-                const { HogFlowScheduleService } = await import(
-                    './cdp/services/hogflow-schedule/hogflow-schedule.service'
-                )
                 const scheduler = new HogFlowScheduleService(this.config)
                 await scheduler.start()
                 return scheduler.service
