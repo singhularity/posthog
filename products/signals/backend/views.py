@@ -468,8 +468,8 @@ class SignalReportViewSet(
         if not commit_hashes or not repository:
             return Response({"results": []})
 
-        github_logins = resolve_suggested_reviewers(self.team.id, repository, commit_hashes)
-        enriched = enrich_reviewers_with_org_members(self.team.id, github_logins)
+        resolved = resolve_suggested_reviewers(self.team.id, repository, commit_hashes)
+        enriched = enrich_reviewers_with_org_members(self.team.id, resolved)
 
         # Cache resolved user IDs on the report for list-level sorting
         user_ids = [r.user_id for r in enriched if r.user_id is not None]

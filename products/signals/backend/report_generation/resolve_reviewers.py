@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import requests
@@ -15,10 +15,23 @@ MAX_SUGGESTED_REVIEWERS = 3
 
 
 @dataclass
+class RelevantCommit:
+    """A commit that was identified as relevant to a signal finding."""
+
+    sha: str
+    url: str
+
+    def to_dict(self) -> dict:
+        return {"sha": self.sha, "url": self.url}
+
+
+@dataclass
 class EnrichedReviewer:
     """A suggested reviewer, optionally linked to a PostHog user."""
 
     github_login: str
+    github_name: str | None = None
+    relevant_commits: list[RelevantCommit] = field(default_factory=list)
     user_id: int | None = None
     user_uuid: str | None = None
     first_name: str | None = None
@@ -29,6 +42,8 @@ class EnrichedReviewer:
     def to_dict(self) -> dict:
         return {
             "github_login": self.github_login,
+            "github_name": self.github_name,
+            "relevant_commits": [c.to_dict() for c in self.relevant_commits],
             "user": {
                 "id": self.user_id,
                 "uuid": self.user_uuid,
@@ -50,8 +65,15 @@ def _get_github_integration(team_id: int) -> GitHubIntegration | None:
     return GitHubIntegration(integration)
 
 
-def _resolve_commit_author(github: GitHubIntegration, repo: str, sha: str) -> str | None:
-    """Resolve a commit SHA to a GitHub login via the GitHub API."""
+@dataclass
+class _CommitAuthorInfo:
+    login: str
+    name: str | None
+    commit_url: str
+
+
+def _resolve_commit_author(github: GitHubIntegration, repo: str, sha: str) -> _CommitAuthorInfo | None:
+    """Resolve a commit SHA to author info via the GitHub API."""
     if github.access_token_expired():
         try:
             github.refresh_access_token()
@@ -76,18 +98,32 @@ def _resolve_commit_author(github: GitHubIntegration, repo: str, sha: str) -> st
         data = response.json()
         author = data.get("author")
         if author and author.get("login"):
-            return author["login"]
+            # Get display name from the commit's git author (not the GH user object)
+            git_author = data.get("commit", {}).get("author", {})
+            name = git_author.get("name") or author.get("login")
+            commit_url = data.get("html_url", f"https://github.com/{repo}/commit/{sha}")
+            return _CommitAuthorInfo(login=author["login"], name=name, commit_url=commit_url)
     except Exception:
         logger.warning("Failed to resolve commit %s in %s", sha[:8], repo, exc_info=True)
     return None
+
+
+@dataclass
+class _ResolvedReviewer:
+    """Intermediate result from commit resolution."""
+
+    login: str
+    name: str | None
+    commits: list[RelevantCommit]
+    weight: int
 
 
 def resolve_suggested_reviewers(
     team_id: int,
     repository: str,
     commit_hashes: list[str],
-) -> list[str]:
-    """Resolve commit hashes to up to 3 GitHub logins, ordered by relevance.
+) -> list[_ResolvedReviewer]:
+    """Resolve commit hashes to up to 3 reviewers with their relevant commits.
 
     Commits earlier in the list are weighted more heavily (they come from
     higher-priority findings and more critical code paths).
@@ -102,6 +138,8 @@ def resolve_suggested_reviewers(
 
     # Weight earlier commits more heavily (position-based weighting)
     login_weights: Counter[str] = Counter()
+    login_commits: dict[str, list[RelevantCommit]] = {}
+    login_names: dict[str, str | None] = {}
     seen_shas: set[str] = set()
 
     for i, sha in enumerate(commit_hashes):
@@ -109,37 +147,57 @@ def resolve_suggested_reviewers(
             continue
         seen_shas.add(sha)
 
-        login = _resolve_commit_author(github, repository, sha)
-        if login:
+        author_info = _resolve_commit_author(github, repository, sha)
+        if author_info:
+            login = author_info.login
             # Earlier commits get higher weight: first commit gets weight N, last gets 1
             weight = len(commit_hashes) - i
             login_weights[login] += weight
+            login_commits.setdefault(login, []).append(RelevantCommit(sha=sha, url=author_info.commit_url))
+            # Keep the first name we see (from highest-weight commit)
+            if login not in login_names:
+                login_names[login] = author_info.name
 
     # Return top reviewers by weighted score
-    return [login for login, _ in login_weights.most_common(MAX_SUGGESTED_REVIEWERS)]
+    return [
+        _ResolvedReviewer(
+            login=login,
+            name=login_names.get(login),
+            commits=login_commits.get(login, []),
+            weight=weight,
+        )
+        for login, weight in login_weights.most_common(MAX_SUGGESTED_REVIEWERS)
+    ]
 
 
 def enrich_reviewers_with_org_members(
     team_id: int,
-    github_logins: list[str],
+    resolved_reviewers: list[_ResolvedReviewer],
 ) -> list[EnrichedReviewer]:
-    """Enrich GitHub logins with PostHog user info by matching via social auth.
+    """Enrich resolved reviewers with PostHog user info by matching via social auth.
 
-    Returns EnrichedReviewer objects. When a GitHub login matches an org member
-    who signed in with GitHub, the user info is populated; otherwise only
-    github_login is set.
+    Returns EnrichedReviewer objects for all reviewers. When a GitHub login matches
+    an org member who signed in with GitHub, the user info is populated; otherwise
+    only github_login, github_name, and relevant_commits are set.
     """
     from social_django.models import UserSocialAuth
 
     from posthog.models.team.team import Team
 
-    if not github_logins:
+    if not resolved_reviewers:
         return []
 
     try:
         org_id = Team.objects.values_list("organization_id", flat=True).get(id=team_id)
     except Team.DoesNotExist:
-        return [EnrichedReviewer(github_login=login) for login in github_logins]
+        return [
+            EnrichedReviewer(
+                github_login=r.login,
+                github_name=r.name,
+                relevant_commits=r.commits,
+            )
+            for r in resolved_reviewers
+        ]
 
     # Fetch all GitHub social auth records for org members in one query
     social_auths = (
@@ -171,22 +229,21 @@ def enrich_reviewers_with_org_members(
             login_to_user[login.lower()] = sa.user
 
     enriched: list[EnrichedReviewer] = []
-    for login in github_logins:
-        user = login_to_user.get(login.lower())
+    for r in resolved_reviewers:
+        user = login_to_user.get(r.login.lower())
+        reviewer = EnrichedReviewer(
+            github_login=r.login,
+            github_name=r.name,
+            relevant_commits=r.commits,
+        )
         if user is not None:
-            enriched.append(
-                EnrichedReviewer(
-                    github_login=login,
-                    user_id=user.id,
-                    user_uuid=str(user.uuid),
-                    first_name=user.first_name,
-                    last_name=user.last_name,
-                    email=user.email,
-                    hedgehog_config=user.hedgehog_config,
-                )
-            )
-        else:
-            enriched.append(EnrichedReviewer(github_login=login))
+            reviewer.user_id = user.id
+            reviewer.user_uuid = str(user.uuid)
+            reviewer.first_name = user.first_name
+            reviewer.last_name = user.last_name
+            reviewer.email = user.email
+            reviewer.hedgehog_config = user.hedgehog_config
+        enriched.append(reviewer)
 
     return enriched
 

@@ -12,8 +12,15 @@ export interface SignalReport {
     is_suggested_reviewer: boolean
 }
 
+export interface RelevantCommit {
+    sha: string
+    url: string
+}
+
 export interface EnrichedReviewer {
     github_login: string
+    github_name: string | null
+    relevant_commits: RelevantCommit[]
     user: {
         id: number
         uuid: string

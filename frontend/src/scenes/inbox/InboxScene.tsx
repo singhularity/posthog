@@ -456,30 +456,50 @@ function SuggestedReviewers({ reviewers }: { reviewers: EnrichedReviewer[] }): J
     }
 
     return (
-        <div className="border rounded bg-surface-primary mb-3 px-3 py-2 flex items-center gap-2">
-            <span className="text-xs font-medium text-tertiary shrink-0">Suggested reviewers:</span>
-            <div className="flex items-center gap-2 flex-wrap">
-                {reviewers.map((reviewer) => (
-                    <Link
-                        key={reviewer.github_login}
-                        to={`https://github.com/${reviewer.github_login}`}
-                        target="_blank"
-                        className="inline-flex items-center gap-1.5"
-                    >
-                        {reviewer.user ? (
-                            <>
-                                <ProfilePicture user={reviewer.user} size="xs" showName={false} />
-                                <LemonTag size="small" type="highlight">
-                                    {reviewer.user.first_name || `@${reviewer.github_login}`}
-                                </LemonTag>
-                            </>
-                        ) : (
-                            <LemonTag size="small" type="highlight">
-                                @{reviewer.github_login}
-                            </LemonTag>
-                        )}
-                    </Link>
-                ))}
+        <div className="border rounded bg-surface-primary mb-3 px-3 py-2.5 space-y-2">
+            <span className="text-xs font-medium text-tertiary">Suggested reviewers:</span>
+            <div className="flex flex-col gap-2">
+                {reviewers.map((reviewer) => {
+                    const displayName = reviewer.user?.first_name || reviewer.github_name || reviewer.github_login
+
+                    return (
+                        <div key={reviewer.github_login} className="flex items-start gap-2">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {reviewer.user ? (
+                                    <ProfilePicture user={reviewer.user} size="xs" showName={false} />
+                                ) : (
+                                    <Tooltip
+                                        title={`${displayName} hasn't connected their GitHub account to PostHog yet. Ask them to do so in Settings!`}
+                                    >
+                                        <img
+                                            src={`https://github.com/${reviewer.github_login}.png?size=40`}
+                                            alt={displayName}
+                                            className="w-5 h-5 rounded-full opacity-60"
+                                        />
+                                    </Tooltip>
+                                )}
+                                <Link to={`https://github.com/${reviewer.github_login}`} target="_blank">
+                                    <LemonTag size="small" type={reviewer.user ? 'highlight' : 'muted'}>
+                                        {displayName}
+                                    </LemonTag>
+                                </Link>
+                            </div>
+                            {reviewer.relevant_commits.length > 0 && (
+                                <span className="text-xs text-tertiary truncate">
+                                    {'— '}
+                                    {reviewer.relevant_commits.map((commit, i) => (
+                                        <span key={commit.sha}>
+                                            {i > 0 && ', '}
+                                            <Link to={commit.url} target="_blank" className="font-mono">
+                                                {commit.sha.slice(0, 7)}
+                                            </Link>
+                                        </span>
+                                    ))}
+                                </span>
+                            )}
+                        </div>
+                    )
+                })}
             </div>
         </div>
     )
