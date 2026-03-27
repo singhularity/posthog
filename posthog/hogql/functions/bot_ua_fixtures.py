@@ -25,6 +25,7 @@ BOT_USER_AGENTS: dict[str, list[str]] = {
         "omgili/0.5 +http://omgili.com",
         "Webzio-Extended/1.0 (+https://webz.io)",
         "Mozilla/5.0 (compatible; Timpibot/0.9; +https://www.timpi.io)",
+        "Applebot-Extended/0.1 (https://support.apple.com/en-us/HT210060)",
     ],
     "search_crawler": [
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15 Applebot/0.1",
