@@ -87,7 +87,7 @@ class TestTrafficTypeIntegration(BaseTest):
         for i, (ua, _category) in enumerate(all_cases):
             _create_event(
                 distinct_id=f"ua-{i}",
-                event="$pageview",
+                event="test_bulk_classify",
                 team=self.team,
                 properties={"$user_agent": ua},
             )
@@ -102,7 +102,7 @@ class TestTrafficTypeIntegration(BaseTest):
                 __preview_getTrafficCategory(properties.$user_agent) as category,
                 __preview_getBotName(properties.$user_agent) as bot_name
             FROM events
-            WHERE event = '$pageview'
+            WHERE event = 'test_bulk_classify'
             ORDER BY ua
             """,
             self.team,
@@ -132,7 +132,7 @@ class TestTrafficTypeIntegration(BaseTest):
     def test_virt_properties_with_raw_user_agent(self):
         _create_event(
             distinct_id="raw-ua",
-            event="$pageview",
+            event="test_raw_ua",
             team=self.team,
             properties={"$raw_user_agent": "Googlebot/2.1"},
         )
@@ -141,7 +141,7 @@ class TestTrafficTypeIntegration(BaseTest):
         response = execute_hogql_query(
             """
             SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`
-            FROM events WHERE event = '$pageview'
+            FROM events WHERE event = 'test_raw_ua'
             """,
             self.team,
         )
@@ -155,7 +155,7 @@ class TestTrafficTypeIntegration(BaseTest):
     def test_virt_properties_with_user_agent_fallback(self):
         _create_event(
             distinct_id="fallback-ua",
-            event="$pageview",
+            event="test_ua_fallback",
             team=self.team,
             properties={"$user_agent": "curl/8.0"},
         )
@@ -164,7 +164,7 @@ class TestTrafficTypeIntegration(BaseTest):
         response = execute_hogql_query(
             """
             SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`
-            FROM events WHERE event = '$pageview'
+            FROM events WHERE event = 'test_ua_fallback'
             """,
             self.team,
         )
@@ -178,7 +178,7 @@ class TestTrafficTypeIntegration(BaseTest):
     def test_virt_properties_raw_ua_takes_precedence(self):
         _create_event(
             distinct_id="both-ua",
-            event="$pageview",
+            event="test_raw_precedence",
             team=self.team,
             properties={
                 "$raw_user_agent": "GPTBot/1.0",
@@ -190,7 +190,7 @@ class TestTrafficTypeIntegration(BaseTest):
         response = execute_hogql_query(
             """
             SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_bot_name`
-            FROM events WHERE event = '$pageview'
+            FROM events WHERE event = 'test_raw_precedence'
             """,
             self.team,
         )
@@ -203,7 +203,7 @@ class TestTrafficTypeIntegration(BaseTest):
     def test_virt_properties_null_user_agent(self):
         _create_event(
             distinct_id="no-ua",
-            event="$pageview",
+            event="test_null_ua",
             team=self.team,
             properties={},
         )
@@ -212,7 +212,7 @@ class TestTrafficTypeIntegration(BaseTest):
         response = execute_hogql_query(
             """
             SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`, `$virt_bot_name`
-            FROM events WHERE event = '$pageview'
+            FROM events WHERE event = 'test_null_ua'
             """,
             self.team,
         )
@@ -226,7 +226,7 @@ class TestTrafficTypeIntegration(BaseTest):
     def test_virt_properties_empty_user_agent(self):
         _create_event(
             distinct_id="empty-ua",
-            event="$pageview",
+            event="test_empty_ua",
             team=self.team,
             properties={"$user_agent": ""},
         )
@@ -235,7 +235,7 @@ class TestTrafficTypeIntegration(BaseTest):
         response = execute_hogql_query(
             """
             SELECT `$virt_is_bot`, `$virt_traffic_type`, `$virt_traffic_category`
-            FROM events WHERE event = '$pageview'
+            FROM events WHERE event = 'test_empty_ua'
             """,
             self.team,
         )
@@ -255,7 +255,7 @@ class TestTrafficTypeIntegration(BaseTest):
         for i, ua in enumerate(bot_uas + regular_uas):
             _create_event(
                 distinct_id=f"filter-{i}",
-                event="$pageview",
+                event="test_bot_filter",
                 team=self.team,
                 properties={"$user_agent": ua},
             )
@@ -265,7 +265,7 @@ class TestTrafficTypeIntegration(BaseTest):
             """
             SELECT properties.$user_agent as ua
             FROM events
-            WHERE event = '$pageview' AND NOT `$virt_is_bot`
+            WHERE event = 'test_bot_filter' AND NOT `$virt_is_bot`
             ORDER BY ua
             """,
             self.team,
@@ -286,7 +286,7 @@ class TestTrafficTypeIntegration(BaseTest):
         for i, (_traffic_type, ua) in enumerate(test_uas.items()):
             _create_event(
                 distinct_id=f"group-{i}",
-                event="$pageview",
+                event="test_group_type",
                 team=self.team,
                 properties={"$user_agent": ua},
             )
@@ -296,7 +296,7 @@ class TestTrafficTypeIntegration(BaseTest):
             """
             SELECT `$virt_traffic_type` as traffic_type, count() as cnt
             FROM events
-            WHERE event = '$pageview'
+            WHERE event = 'test_group_type'
             GROUP BY traffic_type
             ORDER BY traffic_type
             """,
