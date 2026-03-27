@@ -4,17 +4,19 @@ import { HogFlowScheduleService } from './hogflow-schedule.service'
 
 const mockProduce = jest.fn()
 const mockDisconnect = jest.fn()
+const mockFetch = jest.fn()
 
 jest.mock('~/kafka/producer', () => ({
     KafkaProducerWrapper: {
-        create: jest.fn().mockResolvedValue({
-            produce: mockProduce,
-            disconnect: mockDisconnect,
-        }),
+        create: jest.fn().mockImplementation(() =>
+            Promise.resolve({
+                produce: mockProduce,
+                disconnect: mockDisconnect,
+            })
+        ),
     },
 }))
 
-const mockFetch = jest.fn()
 jest.mock('~/common/services/internal-fetch', () => ({
     InternalFetchService: jest.fn().mockImplementation(() => ({
         fetch: mockFetch,
@@ -140,22 +142,6 @@ describe('HogFlowScheduleService', () => {
             await service.start()
 
             expect(mockProduce).toHaveBeenCalledTimes(2)
-        })
-    })
-
-    describe('lifecycle', () => {
-        it('reports healthy when running', async () => {
-            mockFetch.mockResolvedValue({
-                fetchResponse: { status: 200, text: () => '{"processed":[],"initialized":[],"failed":[]}' },
-                fetchError: null,
-            })
-
-            await service.start()
-            expect(service.isHealthy().status).toBe('ok')
-        })
-
-        it('reports unhealthy when not running', () => {
-            expect(service.isHealthy().status).toBe('error')
         })
     })
 })

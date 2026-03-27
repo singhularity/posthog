@@ -743,6 +743,8 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                             schedule.save(update_fields=["next_run_at", "updated_at"])
                             continue
 
+                        advance_next_run(schedule, after=schedule.next_run_at)
+
                         processed.append(
                             {
                                 "schedule_id": str(schedule.id),
@@ -752,8 +754,6 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                                 "variables": resolve_variables(hog_flow, schedule),
                             }
                         )
-
-                        advance_next_run(schedule, after=schedule.next_run_at)
                 except Exception:
                     logger.exception("Error processing schedule", schedule_id=str(schedule_id))
                     failed.append(str(schedule_id))

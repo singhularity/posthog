@@ -152,7 +152,7 @@ class TestProcessDueSchedules(APIBaseTest):
     INTERNAL_URL = "/api/internal/hog_flows/process_due_schedules"
 
     def _create_workflow_with_schedule(
-        self, next_run_at=None, rrule="FREQ=HOURLY;INTERVAL=1", schedule_status="active"
+        self, next_run_at=None, rrule="FREQ=HOURLY;INTERVAL=1", schedule_status="active", starts_at=None
     ):
         hog_flow = HogFlow.objects.create(
             team=self.team,
@@ -166,7 +166,7 @@ class TestProcessDueSchedules(APIBaseTest):
             team=self.team,
             hog_flow=hog_flow,
             rrule=rrule,
-            starts_at=datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC),
+            starts_at=starts_at or datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC),
             timezone="UTC",
             status=schedule_status,
             next_run_at=next_run_at,
@@ -222,6 +222,7 @@ class TestProcessDueSchedules(APIBaseTest):
     def test_exhausted_rrule_marks_schedule_completed(self):
         _, schedule = self._create_workflow_with_schedule(
             next_run_at=datetime(2020, 1, 1, tzinfo=UTC),
+            starts_at=datetime(2019, 12, 31, tzinfo=UTC),
             rrule="FREQ=DAILY;COUNT=1",
         )
         response = self._post()
