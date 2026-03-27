@@ -144,7 +144,7 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
         {
             title: 'General',
             show: !(editorPanelsEnabled && isRetention),
-            ...(editorPanelsEnabled ? { defaultExpanded: true } : {}),
+            defaultExpanded: editorPanelsEnabled ? true : undefined,
             editorFilters: visibleFilters([
                 {
                     key: 'retention-condition',
@@ -192,7 +192,8 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
         },
         {
             title: 'Series',
-            ...(editorPanelsEnabled ? { defaultExpanded: true, collapsedSummary: seriesSummary } : {}),
+            defaultExpanded: editorPanelsEnabled ? true : undefined,
+            collapsedSummary: editorPanelsEnabled ? seriesSummary : undefined,
             editorFilters: visibleFilters([
                 {
                     key: 'series',
@@ -222,7 +223,7 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
                       ? 'Path settings'
                       : 'Advanced options'
                 : 'Advanced options',
-            ...(editorPanelsEnabled ? { defaultExpanded: false } : {}),
+            defaultExpanded: editorPanelsEnabled ? false : undefined,
             editorFilters: visibleFilters([
                 { key: 'paths-advanced', component: PathsAdvanced, show: isPaths },
                 {
@@ -238,7 +239,8 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
     const rightEditorFilterGroups: InsightEditorFilterGroup[] = [
         {
             title: 'Filters',
-            ...(editorPanelsEnabled ? { defaultExpanded: false, collapsedSummary: filtersSummary } : {}),
+            defaultExpanded: editorPanelsEnabled ? false : undefined,
+            collapsedSummary: editorPanelsEnabled ? filtersSummary : undefined,
             editorFilters: visibleFilters([
                 {
                     key: 'toggles',
@@ -302,7 +304,8 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
         },
         {
             title: 'Breakdown',
-            ...(editorPanelsEnabled ? { defaultExpanded: false, collapsedSummary: breakdownSummary } : {}),
+            defaultExpanded: editorPanelsEnabled ? false : undefined,
+            collapsedSummary: editorPanelsEnabled ? breakdownSummary : undefined,
             editorFilters: visibleFilters([
                 { key: 'breakdown', component: Breakdown, show: hasBreakdown },
                 {
@@ -362,7 +365,8 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
         },
         {
             title: 'Exclusions',
-            ...(editorPanelsEnabled ? { defaultExpanded: false, collapsedSummary: exclusionsSummary } : {}),
+            defaultExpanded: editorPanelsEnabled ? false : undefined,
+            collapsedSummary: editorPanelsEnabled ? exclusionsSummary : undefined,
             editorFilters: visibleFilters([
                 {
                     key: 'paths-exclusions',
