@@ -42,6 +42,7 @@ import { IconArrowDown } from 'lib/lemon-ui/icons'
 import { More } from 'lib/lemon-ui/LemonButton/More'
 import { LemonDialog } from 'lib/lemon-ui/LemonDialog'
 import { LemonMarkdown } from 'lib/lemon-ui/LemonMarkdown'
+import { ProfilePicture } from 'lib/lemon-ui/ProfilePicture/ProfilePicture'
 import { statusBadgeColor } from 'scenes/debug/signals/helpers'
 import type { SignalNode } from 'scenes/debug/signals/types'
 import { preflightLogic } from 'scenes/PreflightCheck/preflightLogic'
@@ -57,7 +58,7 @@ import { SignalCard } from './SignalCard'
 import { SignalGraphTab } from './SignalGraphTab'
 import { signalSourcesLogic } from './signalSourcesLogic'
 import { SourcesModal } from './SourcesModal'
-import { SignalReport, SignalReportArtefact, SignalReportStatus } from './types'
+import { EnrichedReviewer, SignalReport, SignalReportArtefact, SignalReportStatus } from './types'
 
 export const scene: SceneExport = {
     component: InboxScene,
@@ -82,12 +83,19 @@ function ReportListItem({ report }: { report: SignalReport }): JSX.Element {
                     : undefined
             }
             className={clsx(
-                `w-full text-left px-3 py-2.5 flex items-start gap-2 cursor-pointer rounded border border-primary overflow-hidden`,
-                isSelected ? 'bg-surface-primary' : 'bg-surface-secondary hover:bg-surface-tertiary'
+                `w-full text-left px-3 py-2.5 flex items-start gap-2 cursor-pointer rounded border overflow-hidden`,
+                report.is_suggested_reviewer
+                    ? 'border-primary bg-primary-alt-highlight'
+                    : isSelected
+                      ? 'border-primary bg-surface-primary'
+                      : 'border-primary bg-surface-secondary hover:bg-surface-tertiary'
             )}
         >
             <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-medium m-0 truncate flex-1">{report.title || <i>Untitled report</i>}</h4>
+                <h4 className="text-sm font-medium m-0 truncate flex-1 flex items-center gap-1.5">
+                    {report.is_suggested_reviewer && <ProfilePicture size="xs" showName={false} />}
+                    {report.title || <i>Untitled report</i>}
+                </h4>
 
                 {report.summary && (
                     <p
@@ -442,6 +450,41 @@ function JudgmentBadges({ artefacts }: { artefacts: SignalReportArtefact[] }): J
     )
 }
 
+function SuggestedReviewers({ reviewers }: { reviewers: EnrichedReviewer[] }): JSX.Element | null {
+    if (reviewers.length === 0) {
+        return null
+    }
+
+    return (
+        <div className="border rounded bg-surface-primary mb-3 px-3 py-2 flex items-center gap-2">
+            <span className="text-xs font-medium text-tertiary shrink-0">Suggested reviewers:</span>
+            <div className="flex items-center gap-2 flex-wrap">
+                {reviewers.map((reviewer) => (
+                    <Link
+                        key={reviewer.github_login}
+                        to={`https://github.com/${reviewer.github_login}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1.5"
+                    >
+                        {reviewer.user ? (
+                            <>
+                                <ProfilePicture user={reviewer.user} size="xs" showName={false} />
+                                <LemonTag size="small" type="highlight">
+                                    {reviewer.user.first_name || `@${reviewer.github_login}`}
+                                </LemonTag>
+                            </>
+                        ) : (
+                            <LemonTag size="small" type="highlight">
+                                @{reviewer.github_login}
+                            </LemonTag>
+                        )}
+                    </Link>
+                ))}
+            </div>
+        </div>
+    )
+}
+
 function ReportDetailPane(): JSX.Element {
     const {
         selectedReport,
@@ -450,6 +493,7 @@ function ReportDetailPane(): JSX.Element {
         activeDetailTab,
         selectedReportSignals,
         reportSignalsLoading,
+        selectedReportReviewers,
     } = useValues(inboxSceneLogic)
     const { deleteReport, reingestReport, setActiveDetailTab } = useActions(inboxSceneLogic)
     const { user } = useValues(userLogic)
@@ -612,6 +656,11 @@ function ReportDetailPane(): JSX.Element {
                                     {/* Judgment badges from artefacts */}
                                     {reportArtefacts && reportArtefacts.length > 0 && (
                                         <JudgmentBadges artefacts={reportArtefacts} />
+                                    )}
+
+                                    {/* Suggested reviewers */}
+                                    {selectedReportReviewers && selectedReportReviewers.length > 0 && (
+                                        <SuggestedReviewers reviewers={selectedReportReviewers} />
                                     )}
 
                                     {/* Signal cards as primary content */}

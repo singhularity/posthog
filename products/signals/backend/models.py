@@ -73,6 +73,15 @@ class SignalReport(UUIDModel):
     summary = models.TextField(null=True, blank=True)
     error = models.TextField(null=True, blank=True)
 
+    # Cached user IDs of suggested reviewers (resolved from commit authors via GitHub).
+    # Populated lazily when the suggested_reviewers endpoint is first called for a report.
+    suggested_reviewer_user_ids = ArrayField(
+        base_field=models.IntegerField(),
+        null=True,
+        blank=True,
+        default=None,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     promoted_at = models.DateTimeField(null=True, blank=True)

@@ -111,6 +111,7 @@ class SignalSourceConfigSerializer(serializers.ModelSerializer):
 
 class SignalReportSerializer(serializers.ModelSerializer):
     artefact_count = serializers.IntegerField(read_only=True)
+    is_suggested_reviewer = serializers.BooleanField(read_only=True, default=False)
 
     class Meta:
         model = SignalReport
@@ -125,6 +126,7 @@ class SignalReportSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "artefact_count",
+            "is_suggested_reviewer",
         ]
         read_only_fields = fields
 

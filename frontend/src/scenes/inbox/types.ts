@@ -9,6 +9,19 @@ export interface SignalReport {
     created_at: string
     updated_at: string
     artefact_count: number
+    is_suggested_reviewer: boolean
+}
+
+export interface EnrichedReviewer {
+    github_login: string
+    user: {
+        id: number
+        uuid: string
+        first_name: string
+        last_name: string
+        email: string
+        hedgehog_config: Record<string, any> | null
+    } | null
 }
 
 export enum SignalReportStatus {

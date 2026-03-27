@@ -14,7 +14,13 @@ import { Breadcrumb } from '~/types'
 
 import type { inboxSceneLogicType } from './inboxSceneLogicType'
 import { signalSourcesLogic } from './signalSourcesLogic'
-import { SignalReport, SignalReportArtefact, SignalReportArtefactResponse, SignalReportStatus } from './types'
+import {
+    EnrichedReviewer,
+    SignalReport,
+    SignalReportArtefact,
+    SignalReportArtefactResponse,
+    SignalReportStatus,
+} from './types'
 
 const REPORTS_PAGE_SIZE = 200
 
@@ -84,6 +90,15 @@ export const inboxSceneLogic = kea<inboxSceneLogicType>([
                 loadReportSignals: async ({ reportId }: { reportId: string }) => {
                     const response = await api.signalReports.getReportSignals(reportId)
                     return { ...values.reportSignals, [reportId]: response.signals }
+                },
+            },
+        ],
+        suggestedReviewers: [
+            {} as Record<string, EnrichedReviewer[]>,
+            {
+                loadSuggestedReviewers: async ({ reportId }: { reportId: string }) => {
+                    const response = await api.signalReports.suggestedReviewers(reportId)
+                    return { ...values.suggestedReviewers, [reportId]: response.results }
                 },
             },
         ],
@@ -176,6 +191,13 @@ export const inboxSceneLogic = kea<inboxSceneLogicType>([
             (reportSignals: Record<string, SignalNode[]>, selectedReportId: string | null): SignalNode[] | null =>
                 selectedReportId ? (reportSignals[selectedReportId] ?? null) : null,
         ],
+        selectedReportReviewers: [
+            (s) => [s.suggestedReviewers, s.selectedReportId],
+            (
+                suggestedReviewers: Record<string, EnrichedReviewer[]>,
+                selectedReportId: string | null
+            ): EnrichedReviewer[] | null => (selectedReportId ? (suggestedReviewers[selectedReportId] ?? null) : null),
+        ],
     }),
 
     listeners(({ actions, values, cache }) => ({
@@ -193,6 +215,9 @@ export const inboxSceneLogic = kea<inboxSceneLogicType>([
                 }
                 if (!values.reportSignals[id]) {
                     actions.loadReportSignals({ reportId: id })
+                }
+                if (!values.suggestedReviewers[id]) {
+                    actions.loadSuggestedReviewers({ reportId: id })
                 }
             }
         },

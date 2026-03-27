@@ -6,7 +6,7 @@ from typing import cast
 
 from django.conf import settings
 from django.db import IntegrityError
-from django.db.models import Count, Q
+from django.db.models import BooleanField, Case, Count, Q, Value, When
 
 from asgiref.sync import async_to_sync
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -39,6 +39,10 @@ from products.signals.backend.models import (
     SignalReport,
     SignalReportArtefact,
     SignalSourceConfig,
+)
+from products.signals.backend.report_generation.resolve_reviewers import (
+    enrich_reviewers_with_org_members,
+    resolve_suggested_reviewers,
 )
 from products.signals.backend.serializers import (
     SignalReportArtefactSerializer,
@@ -226,7 +230,24 @@ class SignalReportViewSet(
         search = self.request.query_params.get("search")
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(summary__icontains=search))
+
+        # Annotate is_suggested_reviewer: True when the current user is among the cached reviewers.
+        user_id = self.request.user.id
+        qs = qs.annotate(
+            is_suggested_reviewer=Case(
+                When(suggested_reviewer_user_ids__contains=[user_id], then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
+        )
+
         return qs
+
+    def filter_queryset(self, queryset):
+        """Ensure reports assigned to the current user always sort first."""
+        qs = super().filter_queryset(queryset)
+        # Prepend is_suggested_reviewer to whatever ordering DRF applied
+        return qs.order_by("-is_suggested_reviewer", *qs.query.order_by)
 
     def get_serializer_context(self):
         return {**super().get_serializer_context(), "team": self.team}
@@ -412,3 +433,47 @@ class SignalReportViewSet(
             )
 
         return Response({"status": "reingestion_started", "report_id": report_id}, status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(exclude=True)
+    @action(detail=True, methods=["get"], url_path="suggested_reviewers", required_scopes=["task:read"])
+    def suggested_reviewers(self, request, pk=None, **kwargs):
+        """Resolve commit hashes from signal findings to GitHub logins, enriched with org member info."""
+        report = cast(SignalReport, self.get_object())
+
+        # Collect commit hashes from signal_finding artefacts (in order)
+        finding_artefacts = report.artefacts.filter(type=SignalReportArtefact.ArtefactType.SIGNAL_FINDING).order_by(
+            "created_at"
+        )
+
+        commit_hashes: list[str] = []
+        for artefact in finding_artefacts:
+            try:
+                content = json.loads(artefact.content)
+                for sha in content.get("relevant_commit_hashes", []):
+                    if sha and isinstance(sha, str):
+                        commit_hashes.append(sha)
+            except (json.JSONDecodeError, ValueError):
+                continue
+
+        # Get repository from repo_selection artefact
+        repo_artefact = report.artefacts.filter(type=SignalReportArtefact.ArtefactType.REPO_SELECTION).first()
+        repository = ""
+        if repo_artefact:
+            try:
+                repo_content = json.loads(repo_artefact.content)
+                repository = repo_content.get("repository", "") or ""
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        if not commit_hashes or not repository:
+            return Response({"results": []})
+
+        github_logins = resolve_suggested_reviewers(self.team.id, repository, commit_hashes)
+        enriched = enrich_reviewers_with_org_members(self.team.id, github_logins)
+
+        # Cache resolved user IDs on the report for list-level sorting
+        user_ids = [r.user_id for r in enriched if r.user_id is not None]
+        report.suggested_reviewer_user_ids = user_ids or None
+        report.save(update_fields=["suggested_reviewer_user_ids"])
+
+        return Response({"results": [r.to_dict() for r in enriched]})

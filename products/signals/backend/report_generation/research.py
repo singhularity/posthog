@@ -21,9 +21,22 @@ class SignalFinding(BaseModel):
     signal_id: str = Field(description="The signal_id from the input signal list")
     relevant_code_paths: list[str] = Field(
         description=(
-            "File paths in the codebase relevant to this signal. "
-            "Include paths to the feature/component the signal is about, "
-            "related posthog.capture() calls, and feature flag checks."
+            "File paths in the codebase relevant to this signal, ordered from most critical first. "
+            "The first path should be the highest-impact file (e.g. the buggy module or core feature file). "
+            "Then include supporting paths: related posthog.capture() calls, feature flag checks, etc."
+        ),
+    )
+    relevant_commit_hashes: list[str] = Field(
+        default_factory=list,
+        json_schema_extra={"minItems": 1},
+        description=(
+            "Git commit SHAs most relevant to this signal, ordered from most relevant first. "
+            "Use `git blame` on the most critical code paths to identify commits that caused or "
+            "are most closely related to the issue described by this signal. Prioritize causative "
+            "commits (e.g. the commit that introduced a bug) over general authorship commits. "
+            "If no causative commit is clear, include the commits that authored the bulk of the "
+            "relevant code. Include 1-5 commit hashes. Use full 40-character SHAs. "
+            "This field is required and must not be empty."
         ),
     )
     data_queried: str = Field(
@@ -238,11 +251,12 @@ _RESEARCH_PROTOCOL = """## Research protocol
 For each signal, find **code evidence** and **data evidence**:
 
 - **Code:** Trace the code path behind the signal's claim — find the relevant files, read the implementation, and understand how the logic actually works. Even if the signal doesn't mention specific files, search for the feature/component and dig in. Also look for `posthog.capture` calls or feature flag checks nearby — these show what the team tracks and gates, which helps gauge importance.
+- **Git blame (required):** Once you've identified the most critical code paths, you MUST run `git blame` on the key files/regions to find the commits most relevant to this signal. Prioritize causative commits (e.g. the commit that introduced a bug or changed behavior) over general authorship. If no causative commit is clear, include the commits that authored the bulk of the relevant code. Include the full 40-character SHA for each relevant commit. Every finding must have at least one commit hash.
 - **Data:** Use PostHog MCP tools (`execute-sql`, `query-run`, `read-data-schema`, etc.) to check real impact — error rates, user counts, conversion metrics. If the signal references a specific insight, experiment, or feature flag, look it up directly.
 
 Cross-reference code and data — does the data corroborate what the code suggests?
 
-**Budget:** Spend no more than ~8 tool calls per signal. If you can't verify a signal's claim after that, mark it unverified and move on."""
+**Budget:** Spend no more than ~10 tool calls per signal. If you can't verify a signal's claim after that, mark it unverified and move on."""
 
 _ACTIONABILITY_CRITERIA = """## Actionability criteria
 
@@ -445,6 +459,16 @@ def _enforce_signal_id(finding: SignalFinding, expected_id: str) -> SignalFindin
     return finding
 
 
+def _validate_finding(finding: SignalFinding) -> None:
+    """Validate invariants on a freshly-produced finding that we don't enforce
+    on deserialization of older artefacts (for backwards compatibility)."""
+    if not finding.relevant_commit_hashes:
+        raise ValueError(
+            f"Finding for signal {finding.signal_id} has no relevant_commit_hashes — "
+            "the research agent must run git blame on the most critical code paths"
+        )
+
+
 async def run_multi_turn_research(
     signals: list[SignalData],
     context: CustomPromptSandboxContext,
@@ -499,6 +523,7 @@ async def run_multi_turn_research(
         output_fn=output_fn,
     )
     first_finding = _enforce_signal_id(first_finding, signals[0].signal_id)
+    _validate_finding(first_finding)
     findings: list[SignalFinding] = [first_finding]
     if output_fn:
         output_fn(f"Signal 1/{total} done: {first_finding.signal_id}")
@@ -520,6 +545,7 @@ async def run_multi_turn_research(
             label=f"signal_{i}_of_{total}",
         )
         finding = _enforce_signal_id(finding, signal.signal_id)
+        _validate_finding(finding)
         findings.append(finding)
         if output_fn:
             output_fn(f"Signal {i}/{total} done: {finding.signal_id}")

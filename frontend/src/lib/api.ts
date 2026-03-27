@@ -11,7 +11,7 @@ import { CohortCalculationHistoryResponse } from 'scenes/cohorts/cohortCalculati
 import { EventSchema } from 'scenes/data-management/events/eventDefinitionSchemaLogic'
 import { SchemaPropertyGroup } from 'scenes/data-management/schema/schemaManagementLogic'
 import { SignalNode } from 'scenes/debug/signals/types'
-import { SignalReport, SignalReportArtefactResponse, SignalSourceConfig } from 'scenes/inbox/types'
+import { EnrichedReviewer, SignalReport, SignalReportArtefactResponse, SignalSourceConfig } from 'scenes/inbox/types'
 import { MaxBillingContext } from 'scenes/max/maxBillingContextLogic'
 import { NotebookListItemType, NotebookNodeResource, NotebookType } from 'scenes/notebooks/types'
 import { RecordingComment } from 'scenes/session-recordings/player/inspector/playerInspectorLogic'
@@ -4402,6 +4402,9 @@ const api = {
         },
         async reingest(id: SignalReport['id']): Promise<{ status: string; report_id: string }> {
             return await new ApiRequest().signalReport(id).withAction('reingest').create()
+        },
+        async suggestedReviewers(id: SignalReport['id']): Promise<{ results: EnrichedReviewer[] }> {
+            return await new ApiRequest().signalReport(id).withAction('suggested_reviewers').get()
         },
     },
 
