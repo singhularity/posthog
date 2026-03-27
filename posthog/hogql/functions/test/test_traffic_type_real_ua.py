@@ -323,24 +323,28 @@ class TestTrafficTypeIntegration(BaseTest):
 
 
 class TestVirtualPropertiesWithCustomEvents(BaseTest):
-    @pytest.mark.parametrize(
-        "event_name",
-        ["$pageview", "$pageleave", "$autocapture", "custom_event", "http_request", "api_call"],
-    )
-    def test_virt_properties_work_across_event_types(self, event_name: str):
+    def test_virt_properties_work_across_event_types(self):
         tag = uuid4().hex
-        props: dict = {"$user_agent": "Googlebot/2.1", "_test_tag": tag}
-        _create_event(distinct_id="cross-event", event=event_name, team=self.team, properties=props)
+        event_names = ["$pageview", "$pageleave", "$autocapture", "custom_event", "http_request", "api_call"]
+
+        for i, event_name in enumerate(event_names):
+            _create_event(
+                distinct_id=f"cross-{i}",
+                event=event_name,
+                team=self.team,
+                properties={"$user_agent": "Googlebot/2.1", "_test_tag": tag},
+            )
         flush_persons_and_events()
 
-        response = execute_hogql_query(
-            f"""
-            SELECT `$virt_is_bot`, `$virt_traffic_type`
-            FROM events WHERE properties._test_tag = '{tag}'
-            """,
-            self.team,
-        )
-        assert len(response.results) == 1
-        is_bot, traffic_type = response.results[0]
-        assert is_bot == 1
-        assert traffic_type == "Bot"
+        for event_name in event_names:
+            response = execute_hogql_query(
+                f"""
+                SELECT `$virt_is_bot`, `$virt_traffic_type`
+                FROM events WHERE properties._test_tag = '{tag}' AND event = '{event_name}'
+                """,
+                self.team,
+            )
+            assert len(response.results) == 1, f"Expected 1 result for {event_name}, got {len(response.results)}"
+            is_bot, traffic_type = response.results[0]
+            assert is_bot == 1, f"is_bot should be 1 for {event_name}"
+            assert traffic_type == "Bot", f"traffic_type should be Bot for {event_name}"
