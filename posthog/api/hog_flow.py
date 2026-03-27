@@ -691,15 +691,26 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
 
         try:
             # 1. Process due schedules (next_run_at <= now)
-            with transaction.atomic():
-                due_schedules = list(
-                    HogFlowSchedule.objects.select_for_update(skip_locked=True)
-                    .filter(status=HogFlowSchedule.Status.ACTIVE, next_run_at__lte=timezone.now())
-                    .select_related("hog_flow")
-                )
+            due_schedule_ids = list(
+                HogFlowSchedule.objects.filter(
+                    status=HogFlowSchedule.Status.ACTIVE, next_run_at__lte=timezone.now()
+                ).values_list("id", flat=True)
+            )
 
-                for schedule in due_schedules:
-                    try:
+            for schedule_id in due_schedule_ids:
+                try:
+                    with transaction.atomic():
+                        schedule = (
+                            HogFlowSchedule.objects.select_for_update(skip_locked=True)
+                            .select_related("hog_flow")
+                            .filter(
+                                id=schedule_id, status=HogFlowSchedule.Status.ACTIVE, next_run_at__lte=timezone.now()
+                            )
+                            .first()
+                        )
+                        if not schedule:
+                            continue
+
                         hog_flow = schedule.hog_flow
                         trigger_type = (hog_flow.trigger or {}).get("type")
 
@@ -740,20 +751,28 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                             schedule.status = HogFlowSchedule.Status.COMPLETED
                             schedule.next_run_at = None
                             schedule.save(update_fields=["status", "next_run_at", "updated_at"])
-                    except Exception:
-                        logger.exception("Error processing schedule", schedule_id=str(schedule.id))
-                        failed.append(str(schedule.id))
+                except Exception:
+                    logger.exception("Error processing schedule", schedule_id=str(schedule_id))
+                    failed.append(str(schedule_id))
 
             # 2. Initialize next_run_at for schedules that need it
-            with transaction.atomic():
-                uninitialized = list(
-                    HogFlowSchedule.objects.select_for_update(skip_locked=True)
-                    .filter(status=HogFlowSchedule.Status.ACTIVE, next_run_at__isnull=True, hog_flow__status="active")
-                    .select_related("hog_flow")
-                )
+            uninitialized_ids = list(
+                HogFlowSchedule.objects.filter(
+                    status=HogFlowSchedule.Status.ACTIVE, next_run_at__isnull=True, hog_flow__status="active"
+                ).values_list("id", flat=True)
+            )
 
-                for schedule in uninitialized:
-                    try:
+            for schedule_id in uninitialized_ids:
+                try:
+                    with transaction.atomic():
+                        schedule = (
+                            HogFlowSchedule.objects.select_for_update(skip_locked=True)
+                            .filter(id=schedule_id, status=HogFlowSchedule.Status.ACTIVE, next_run_at__isnull=True)
+                            .first()
+                        )
+                        if not schedule:
+                            continue
+
                         occurrences = compute_next_occurrences(
                             rrule_string=schedule.rrule,
                             starts_at=schedule.starts_at,
@@ -768,9 +787,9 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                             schedule.status = HogFlowSchedule.Status.COMPLETED
                             schedule.next_run_at = None
                             schedule.save(update_fields=["status", "next_run_at", "updated_at"])
-                    except Exception:
-                        logger.exception("Error initializing schedule", schedule_id=str(schedule.id))
-                        failed.append(str(schedule.id))
+                except Exception:
+                    logger.exception("Error initializing schedule", schedule_id=str(schedule_id))
+                    failed.append(str(schedule_id))
 
             return Response(
                 {
