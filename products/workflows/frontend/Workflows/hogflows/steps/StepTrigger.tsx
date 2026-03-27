@@ -584,7 +584,7 @@ function StepTriggerConfigurationBatch({
     const { workflow } = useValues(workflowLogic)
     const { featureFlags } = useValues(featureFlagLogic)
     const { currentSchedule, saveStatus } = useValues(scheduleLogic({ workflowId: workflow.id }))
-    const { saveSchedule, deleteSchedule } = useActions(scheduleLogic({ workflowId: workflow.id }))
+    const { setDraftSchedule } = useActions(scheduleLogic({ workflowId: workflow.id }))
 
     return (
         <div className="flex flex-col gap-2 my-2 w-full">
@@ -637,13 +637,7 @@ function StepTriggerConfigurationBatch({
                     </div>
                     <RecurringSchedulePicker
                         schedule={currentSchedule ?? null}
-                        onChange={(schedule) => {
-                            if (schedule) {
-                                saveSchedule(schedule)
-                            } else if (currentSchedule?.id) {
-                                deleteSchedule(currentSchedule.id)
-                            }
-                        }}
+                        onChange={(schedule) => setDraftSchedule(schedule)}
                     />
                 </>
             )}

@@ -20,15 +20,19 @@ export interface ScheduleLogicProps {
     workflowId: string
 }
 
+const DEBOUNCE_MS = 1500
+
 export const scheduleLogic = kea<scheduleLogicType>([
     path(['products', 'workflows', 'frontend', 'Workflows', 'hogflows', 'steps', 'scheduleLogic']),
     props({} as ScheduleLogicProps),
     key((props) => props.workflowId),
 
     actions({
-        saveSchedule: (schedule: Omit<ScheduleConfig, 'id' | 'status' | 'next_run_at'>) => ({ schedule }),
-        deleteSchedule: (scheduleId: string) => ({ scheduleId }),
-        setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error') => ({ status }),
+        setDraftSchedule: (schedule: Omit<ScheduleConfig, 'id' | 'status' | 'next_run_at'> | null) => ({ schedule }),
+        debouncedSave: true,
+        doSave: true,
+        doDelete: true,
+        setSaveStatus: (status: 'idle' | 'unsaved' | 'saving' | 'saved' | 'error') => ({ status }),
     }),
 
     loaders(({ props }) => ({
@@ -49,9 +53,27 @@ export const scheduleLogic = kea<scheduleLogicType>([
 
     reducers({
         saveStatus: [
-            'idle' as 'idle' | 'saving' | 'saved' | 'error',
+            'idle' as 'idle' | 'unsaved' | 'saving' | 'saved' | 'error',
             {
                 setSaveStatus: (_, { status }) => status,
+            },
+        ],
+        draftSchedule: [
+            undefined as Omit<ScheduleConfig, 'id' | 'status' | 'next_run_at'> | null | undefined,
+            {
+                setDraftSchedule: (_, { schedule }) => schedule,
+                loadSchedulesSuccess: () => undefined,
+            },
+        ],
+        debounceTimer: [
+            null as ReturnType<typeof setTimeout> | null,
+            {
+                debouncedSave: (state) => {
+                    if (state) {
+                        clearTimeout(state)
+                    }
+                    return null
+                },
             },
         ],
     }),
@@ -60,9 +82,27 @@ export const scheduleLogic = kea<scheduleLogicType>([
         currentSchedule: [(s) => [s.schedules], (schedules): ScheduleConfig | null => schedules[0] ?? null],
     }),
 
-    listeners(({ actions, props, values }) => ({
-        saveSchedule: async ({ schedule }) => {
-            if (!props.workflowId || props.workflowId === 'new') {
+    listeners(({ actions, props, values, cache }) => ({
+        setDraftSchedule: () => {
+            actions.setSaveStatus('unsaved')
+            actions.debouncedSave()
+        },
+
+        debouncedSave: () => {
+            if (cache.debounceTimeout) {
+                clearTimeout(cache.debounceTimeout)
+            }
+            cache.debounceTimeout = setTimeout(() => {
+                if (values.draftSchedule === null) {
+                    actions.doDelete()
+                } else if (values.draftSchedule !== undefined) {
+                    actions.doSave()
+                }
+            }, DEBOUNCE_MS)
+        },
+
+        doSave: async () => {
+            if (!props.workflowId || props.workflowId === 'new' || values.draftSchedule === undefined) {
                 return
             }
 
@@ -73,9 +113,9 @@ export const scheduleLogic = kea<scheduleLogicType>([
             try {
                 const existing = values.currentSchedule
                 if (existing?.id) {
-                    await api.update(`${baseUrl}${existing.id}/`, schedule)
+                    await api.update(`${baseUrl}${existing.id}/`, values.draftSchedule)
                 } else {
-                    await api.create(baseUrl, schedule)
+                    await api.create(baseUrl, values.draftSchedule)
                 }
                 actions.loadSchedules()
                 actions.setSaveStatus('saved')
@@ -86,11 +126,26 @@ export const scheduleLogic = kea<scheduleLogicType>([
             }
         },
 
-        deleteSchedule: async ({ scheduleId }) => {
+        doDelete: async () => {
+            const existing = values.currentSchedule
+            if (!existing?.id) {
+                actions.setSaveStatus('idle')
+                return
+            }
+
             const projectId = teamLogic.values.currentTeamId
-            const url = `api/projects/${projectId}/hog_flows/${props.workflowId}/schedules/${scheduleId}/`
-            await api.delete(url)
-            actions.loadSchedules()
+            const url = `api/projects/${projectId}/hog_flows/${props.workflowId}/schedules/${existing.id}/`
+
+            actions.setSaveStatus('saving')
+            try {
+                await api.delete(url)
+                actions.loadSchedules()
+                actions.setSaveStatus('saved')
+                setTimeout(() => actions.setSaveStatus('idle'), 2000)
+            } catch {
+                actions.setSaveStatus('error')
+                setTimeout(() => actions.setSaveStatus('idle'), 3000)
+            }
         },
     })),
 
