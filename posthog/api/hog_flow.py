@@ -687,6 +687,7 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
 
         processed = []
         initialized = []
+        failed = []
 
         try:
             # 1. Process due schedules (next_run_at <= now)
@@ -741,6 +742,7 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                             schedule.save(update_fields=["status", "next_run_at", "updated_at"])
                     except Exception:
                         logger.exception("Error processing schedule", schedule_id=str(schedule.id))
+                        failed.append(str(schedule.id))
 
             # 2. Initialize next_run_at for schedules that need it
             with transaction.atomic():
@@ -768,11 +770,13 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                             schedule.save(update_fields=["status", "next_run_at", "updated_at"])
                     except Exception:
                         logger.exception("Error initializing schedule", schedule_id=str(schedule.id))
+                        failed.append(str(schedule.id))
 
             return Response(
                 {
                     "processed": processed,
                     "initialized": initialized,
+                    "failed": failed,
                 }
             )
         except Exception as e:

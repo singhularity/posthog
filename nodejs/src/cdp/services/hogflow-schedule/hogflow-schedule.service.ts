@@ -23,6 +23,7 @@ interface ProcessedSchedule {
 interface ProcessDueSchedulesResponse {
     processed: ProcessedSchedule[]
     initialized: string[]
+    failed: string[]
 }
 
 export class HogFlowScheduleService {
@@ -81,6 +82,13 @@ export class HogFlowScheduleService {
             if (data.initialized.length > 0) {
                 logger.info('HogFlowScheduleService: initialized schedules', {
                     count: data.initialized.length,
+                })
+            }
+
+            if (data.failed.length > 0) {
+                logger.error('HogFlowScheduleService: schedules failed to process', {
+                    count: data.failed.length,
+                    scheduleIds: data.failed,
                 })
             }
 
