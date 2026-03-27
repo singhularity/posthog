@@ -685,7 +685,6 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
         from products.workflows.backend.models.hog_flow_schedule import HogFlowSchedule
         from products.workflows.backend.utils.rrule_utils import compute_next_occurrences
 
-        batch_size = request.data.get("batch_size", 100)
         processed = []
         initialized = []
 
@@ -695,7 +694,7 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                 due_schedules = list(
                     HogFlowSchedule.objects.select_for_update(skip_locked=True)
                     .filter(status=HogFlowSchedule.Status.ACTIVE, next_run_at__lte=timezone.now())
-                    .select_related("hog_flow")[:batch_size]
+                    .select_related("hog_flow")
                 )
 
                 for schedule in due_schedules:
@@ -745,7 +744,7 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                 uninitialized = list(
                     HogFlowSchedule.objects.select_for_update(skip_locked=True)
                     .filter(status=HogFlowSchedule.Status.ACTIVE, next_run_at__isnull=True, hog_flow__status="active")
-                    .select_related("hog_flow")[:batch_size]
+                    .select_related("hog_flow")
                 )
 
                 for schedule in uninitialized:

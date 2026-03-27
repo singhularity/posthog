@@ -57,7 +57,6 @@ export class HogFlowScheduleService {
                 urlPath: '/api/internal/hog_flows/process_due_schedules',
                 fetchParams: {
                     method: 'POST',
-                    body: JSON.stringify({ batch_size: 100 }),
                 },
             })
 
