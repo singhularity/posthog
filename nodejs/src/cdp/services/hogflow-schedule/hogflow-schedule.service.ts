@@ -1,4 +1,4 @@
-import { INTERNAL_SERVICE_CALL_HEADER_NAME } from '~/api/middleware/internal-api-auth'
+import { InternalFetchService } from '~/common/services/internal-fetch'
 import { KAFKA_CDP_BATCH_HOGFLOW_REQUESTS } from '~/config/kafka-topics'
 import { KafkaProducerWrapper } from '~/kafka/producer'
 import {
@@ -10,7 +10,6 @@ import {
 } from '~/types'
 import { parseJSON } from '~/utils/json-parse'
 import { logger } from '~/utils/logger'
-import { internalFetch } from '~/utils/request'
 
 interface ProcessedSchedule {
     schedule_id: string
@@ -30,13 +29,14 @@ export class HogFlowScheduleService {
     private kafkaProducer: KafkaProducerWrapper | null = null
     private intervalHandle: ReturnType<typeof setInterval> | null = null
     private readonly pollIntervalMs: number
-    private readonly internalApiBaseUrl: string
-    private readonly internalApiSecret: string
+    private readonly internalFetchService: InternalFetchService
 
     constructor(private config: PluginsServerConfig) {
         this.pollIntervalMs = 60_000
-        this.internalApiBaseUrl = config.SITE_URL || 'http://localhost:8000'
-        this.internalApiSecret = config.INTERNAL_API_SECRET || 'posthog123'
+        this.internalFetchService = new InternalFetchService(
+            config.SITE_URL || 'http://localhost:8000',
+            config.INTERNAL_API_SECRET || 'posthog123'
+        )
     }
 
     async start(): Promise<void> {
@@ -53,26 +53,31 @@ export class HogFlowScheduleService {
 
     async pollAndDispatch(): Promise<void> {
         try {
-            const url = `${this.internalApiBaseUrl}/api/internal/hog_flows/process_due_schedules`
-            const response = await internalFetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    [INTERNAL_SERVICE_CALL_HEADER_NAME]: this.internalApiSecret,
+            const { fetchResponse, fetchError } = await this.internalFetchService.fetch({
+                urlPath: '/api/internal/hog_flows/process_due_schedules',
+                fetchParams: {
+                    method: 'POST',
+                    body: JSON.stringify({ batch_size: 100 }),
                 },
-                body: JSON.stringify({ batch_size: 100 }),
             })
 
-            if (response.status !== 200) {
-                const errorText = await response.text()
+            if (fetchError || !fetchResponse) {
+                logger.error('HogFlowScheduleService: failed to call Django endpoint', {
+                    error: String(fetchError),
+                })
+                return
+            }
+
+            if (fetchResponse.status !== 200) {
+                const errorText = await fetchResponse.text()
                 logger.error('HogFlowScheduleService: Django endpoint returned error', {
-                    status: response.status,
+                    status: fetchResponse.status,
                     error: errorText,
                 })
                 return
             }
 
-            const data = parseJSON(await response.text()) as ProcessDueSchedulesResponse
+            const data = parseJSON(await fetchResponse.text()) as ProcessDueSchedulesResponse
 
             if (data.initialized.length > 0) {
                 logger.info('HogFlowScheduleService: initialized schedules', {
