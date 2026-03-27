@@ -199,11 +199,17 @@ def enrich_reviewers_with_org_members(
             for r in resolved_reviewers
         ]
 
-    # Fetch all GitHub social auth records for org members in one query
+    from posthog.models.organization import OrganizationMembership
+
+    # Two-step: get org member user IDs, then fetch their GitHub social auth records
+    org_member_user_ids = OrganizationMembership.objects.filter(
+        organization_id=org_id,
+    ).values_list("user_id", flat=True)
+
     social_auths = (
         UserSocialAuth.objects.filter(
             provider="github",
-            user__organization_memberships__organization_id=org_id,
+            user_id__in=org_member_user_ids,
         )
         .select_related("user")
         .only(
