@@ -1,7 +1,4 @@
-import { DateTime } from 'luxon'
-import { Pool } from 'pg'
-import { RRule } from 'rrule'
-
+import { INTERNAL_SERVICE_CALL_HEADER_NAME } from '~/api/middleware/internal-api-auth'
 import { KAFKA_CDP_BATCH_HOGFLOW_REQUESTS } from '~/config/kafka-topics'
 import { KafkaProducerWrapper } from '~/kafka/producer'
 import {
@@ -11,46 +8,38 @@ import {
     PluginServerService,
     PluginsServerConfig,
 } from '~/types'
+import { parseJSON } from '~/utils/json-parse'
 import { logger } from '~/utils/logger'
+import { internalFetch } from '~/utils/request'
 
-interface DueSchedule {
-    id: string
-    next_run_at: Date
-    hog_flow_id: string
+interface ProcessedSchedule {
+    schedule_id: string
     team_id: number
-    rrule: string
-    starts_at: Date
-    timezone: string
+    hog_flow_id: string
+    trigger_type: string
+    filters: Record<string, unknown>
     variables: Record<string, unknown>
 }
 
-interface HogFlowRow {
-    status: string
-    trigger: Record<string, unknown>
-    variables: Array<{ key: string; default?: unknown }> | null
+interface ProcessDueSchedulesResponse {
+    processed: ProcessedSchedule[]
+    initialized: string[]
 }
 
 export class HogFlowScheduleService {
-    private pool: Pool
     private kafkaProducer: KafkaProducerWrapper | null = null
     private intervalHandle: ReturnType<typeof setInterval> | null = null
     private readonly pollIntervalMs: number
-    private readonly batchSize: number
+    private readonly internalApiBaseUrl: string
+    private readonly internalApiSecret: string
 
     constructor(private config: PluginsServerConfig) {
-        this.pool = new Pool({
-            connectionString: config.DATABASE_URL,
-            max: 5,
-            idleTimeoutMillis: 30000,
-        })
         this.pollIntervalMs = 60_000
-        this.batchSize = 100
+        this.internalApiBaseUrl = config.SITE_URL || 'http://localhost:8000'
+        this.internalApiSecret = config.INTERNAL_API_SECRET || 'posthog123'
     }
 
     async start(): Promise<void> {
-        const client = await this.pool.connect()
-        client.release()
-
         this.kafkaProducer = await KafkaProducerWrapper.create(this.config.KAFKA_CLIENT_RACK)
 
         this.intervalHandle = setInterval(() => {
@@ -63,114 +52,64 @@ export class HogFlowScheduleService {
     }
 
     async pollAndDispatch(): Promise<void> {
-        const client = await this.pool.connect()
         try {
-            await client.query('BEGIN')
+            const url = `${this.internalApiBaseUrl}/api/internal/hog_flows/process_due_schedules`
+            const response = await internalFetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    [INTERNAL_SERVICE_CALL_HEADER_NAME]: this.internalApiSecret,
+                },
+                body: JSON.stringify({ batch_size: 100 }),
+            })
 
-            // Query due schedules directly from HogFlowSchedule
-            const result = await client.query<DueSchedule>(
-                `SELECT s.id, s.next_run_at, s.hog_flow_id::text as hog_flow_id, s.team_id,
-                        s.rrule, s.starts_at, s.timezone, s.variables
-                 FROM workflows_hogflowschedule s
-                 WHERE s.status = 'active'
-                   AND s.next_run_at IS NOT NULL
-                   AND s.next_run_at <= NOW()
-                 ORDER BY s.next_run_at ASC
-                 LIMIT $1
-                 FOR UPDATE OF s SKIP LOCKED`,
-                [this.batchSize]
-            )
+            if (response.status !== 200) {
+                const errorText = await response.text()
+                logger.error('HogFlowScheduleService: Django endpoint returned error', {
+                    status: response.status,
+                    error: errorText,
+                })
+                return
+            }
 
-            for (const schedule of result.rows) {
-                try {
-                    const hogFlowResult = await client.query<HogFlowRow>(
-                        `SELECT status, trigger, variables FROM posthog_hogflow WHERE id = $1`,
-                        [schedule.hog_flow_id]
-                    )
+            const data = parseJSON(await response.text()) as ProcessDueSchedulesResponse
 
-                    if (!hogFlowResult.rows.length || hogFlowResult.rows[0].status !== 'active') {
-                        // Workflow no longer active, clear next_run_at
-                        await client.query(
-                            `UPDATE workflows_hogflowschedule SET next_run_at = NULL, updated_at = NOW() WHERE id = $1`,
-                            [schedule.id]
-                        )
-                        continue
-                    }
+            if (data.initialized.length > 0) {
+                logger.info('HogFlowScheduleService: initialized schedules', {
+                    count: data.initialized.length,
+                })
+            }
 
-                    const hogFlow = hogFlowResult.rows[0]
-                    const triggerType = (hogFlow.trigger as Record<string, unknown>)?.type
-
-                    if (triggerType === 'batch') {
-                        await this.dispatchBatchTrigger(schedule, hogFlow)
-                    } else {
-                        await client.query(
-                            `UPDATE workflows_hogflowschedule SET next_run_at = NULL, updated_at = NOW() WHERE id = $1`,
-                            [schedule.id]
-                        )
-                        continue
-                    }
-
-                    // Compute and set next_run_at
-                    const nextRunAt = this.computeNextOccurrence(
-                        schedule.rrule,
-                        new Date(schedule.starts_at),
-                        new Date(schedule.next_run_at),
-                        schedule.timezone
-                    )
-
-                    if (nextRunAt) {
-                        await client.query(
-                            `UPDATE workflows_hogflowschedule SET next_run_at = $2, updated_at = NOW() WHERE id = $1`,
-                            [schedule.id, nextRunAt]
-                        )
-                    } else {
-                        // RRULE exhausted
-                        await client.query(
-                            `UPDATE workflows_hogflowschedule
-                             SET status = 'completed', next_run_at = NULL, updated_at = NOW()
-                             WHERE id = $1`,
-                            [schedule.id]
-                        )
-                    }
-                } catch (err) {
-                    logger.error('HogFlowScheduleService: failed to process schedule', {
-                        scheduleId: schedule.id,
-                        error: String(err),
-                    })
-                    // Clear next_run_at to prevent retry loop, will be re-synced on next save
-                    await client.query(
-                        `UPDATE workflows_hogflowschedule SET next_run_at = NULL, updated_at = NOW() WHERE id = $1`,
-                        [schedule.id]
-                    )
+            for (const schedule of data.processed) {
+                if (schedule.trigger_type === 'batch') {
+                    await this.dispatchBatchTrigger(schedule)
                 }
             }
 
-            await client.query('COMMIT')
+            if (data.processed.length > 0) {
+                logger.info('HogFlowScheduleService: processed due schedules', {
+                    count: data.processed.length,
+                })
+            }
         } catch (err) {
-            await client.query('ROLLBACK')
-            throw err
-        } finally {
-            client.release()
+            logger.error('HogFlowScheduleService: failed to poll', { error: String(err) })
         }
     }
 
-    private async dispatchBatchTrigger(schedule: DueSchedule, hogFlow: HogFlowRow): Promise<void> {
+    private async dispatchBatchTrigger(schedule: ProcessedSchedule): Promise<void> {
         if (!this.kafkaProducer) {
             throw new Error('Kafka producer not available')
         }
-
-        const filters = (hogFlow.trigger as Record<string, unknown>)?.filters as Record<string, unknown> | undefined
-        const resolvedVariables = this.resolveVariables(hogFlow.variables, schedule.variables)
 
         const batchHogFlowRequest = {
             teamId: schedule.team_id,
             hogFlowId: schedule.hog_flow_id,
             parentRunId: null,
             filters: {
-                properties: (filters?.properties as unknown[]) || [],
+                properties: (schedule.filters?.properties as unknown[]) || [],
                 filter_test_accounts: false,
             },
-            variables: resolvedVariables,
+            variables: schedule.variables,
         }
 
         await this.kafkaProducer.produce({
@@ -180,76 +119,10 @@ export class HogFlowScheduleService {
         })
 
         logger.info('HogFlowScheduleService: dispatched batch trigger', {
-            scheduleId: schedule.id,
+            scheduleId: schedule.schedule_id,
             hogFlowId: schedule.hog_flow_id,
             teamId: schedule.team_id,
         })
-    }
-
-    private resolveVariables(
-        hogFlowVariables: Array<{ key: string; default?: unknown }> | null,
-        scheduleVariables: Record<string, unknown>
-    ): Record<string, unknown> {
-        const defaults: Record<string, unknown> = {}
-        for (const variable of hogFlowVariables || []) {
-            defaults[variable.key] = variable.default ?? null
-        }
-        return { ...defaults, ...scheduleVariables }
-    }
-
-    private computeNextOccurrence(
-        rruleStr: string,
-        startsAt: Date,
-        after: Date,
-        timezone: string = 'UTC'
-    ): Date | null {
-        const startsAtLocal = DateTime.fromJSDate(startsAt, { zone: 'utc' }).setZone(timezone)
-        const dtstart = new Date(
-            Date.UTC(
-                startsAtLocal.year,
-                startsAtLocal.month - 1,
-                startsAtLocal.day,
-                startsAtLocal.hour,
-                startsAtLocal.minute,
-                startsAtLocal.second
-            )
-        )
-
-        const parsed = RRule.fromString(rruleStr)
-        const rule = new RRule({ ...parsed.origOptions, dtstart })
-
-        const afterLocal = DateTime.fromJSDate(after, { zone: 'utc' }).setZone(timezone)
-        const afterFakeUtc = new Date(
-            Date.UTC(
-                afterLocal.year,
-                afterLocal.month - 1,
-                afterLocal.day,
-                afterLocal.hour,
-                afterLocal.minute,
-                afterLocal.second
-            )
-        )
-
-        const upperBound = new Date(afterFakeUtc.getTime() + 365 * 24 * 60 * 60 * 1000 * 10)
-        const occurrences = rule.between(afterFakeUtc, upperBound, false)
-
-        if (occurrences.length === 0) {
-            return null
-        }
-
-        const next = occurrences[0]
-        const localDt = DateTime.fromObject(
-            {
-                year: next.getUTCFullYear(),
-                month: next.getUTCMonth() + 1,
-                day: next.getUTCDate(),
-                hour: next.getUTCHours(),
-                minute: next.getUTCMinutes(),
-                second: next.getUTCSeconds(),
-            },
-            { zone: timezone }
-        )
-        return localDt.toUTC().toJSDate()
     }
 
     isRunning(): boolean {
@@ -262,7 +135,6 @@ export class HogFlowScheduleService {
             this.intervalHandle = null
         }
         await this.kafkaProducer?.disconnect()
-        await this.pool.end()
     }
 
     isHealthy(): HealthCheckResult {
