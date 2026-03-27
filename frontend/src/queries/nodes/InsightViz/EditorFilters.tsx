@@ -174,69 +174,59 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
 
     // When panels are enabled and showing retention, split into two top-level groups instead of nesting in General
     const leftEditorFilterGroups: InsightEditorFilterGroup[] = [
-        ...(editorPanelsEnabled && isRetention
-            ? [
-                  {
-                      title: 'Retention condition',
-                      defaultExpanded: true,
-                      editorFilters: [{ key: 'retention-condition', component: RetentionCondition }],
-                  },
-                  {
-                      title: 'Calculation options',
-                      defaultExpanded: false,
-                      editorFilters: [{ key: 'retention-options', component: RetentionOptions }],
-                  },
-              ]
-            : [
-                  {
-                      title: 'General',
-                      ...(editorPanelsEnabled ? { defaultExpanded: true } : {}),
-                      editorFilters: visibleFilters([
-                          {
-                              key: 'retention-condition',
-                              label: 'Retention condition',
-                              component: RetentionCondition,
-                              show: isRetention,
-                          },
-                          {
-                              key: 'retention-options',
-                              label: 'Calculation options',
-                              component: RetentionOptions,
-                              show: isRetention,
-                          },
-                          { key: 'query-steps', component: FunnelsQuerySteps, show: isFunnels },
-                          { key: 'event-types', label: 'Event Types', component: PathsEventsTypes, show: isPaths },
-                          {
-                              key: 'hogql',
-                              label: 'SQL Expression',
-                              component: PathsHogQL,
-                              show: isPaths && !!hasPathsHogQL,
-                          },
-                          {
-                              key: 'wildcard-groups',
-                              label: 'Wildcard Groups',
-                              showOptional: true,
-                              component: PathsWildcardGroups,
-                              show: isPaths && hasPathsAdvanced,
-                              tooltip: (
-                                  <>
-                                      Use wildcard matching to group events by unique values in path item names. Use an
-                                      asterisk (*) in place of unique values. For example, instead of
-                                      /merchant/1234/payment, replace the unique value with an asterisk
-                                      /merchant/*/payment. <b>Use a comma to separate multiple wildcards.</b>
-                                  </>
-                              ),
-                          },
-                          { key: 'start-target', label: 'Starts at', component: PathsTargetStart, show: isPaths },
-                          {
-                              key: 'ends-target',
-                              label: 'Ends at',
-                              component: PathsTargetEnd,
-                              show: isPaths && hasPathsAdvanced,
-                          },
-                      ]),
-                  },
-              ]),
+        // Panels+retention: dedicated top-level groups (hidden otherwise via visibleGroups)
+        {
+            title: 'Retention condition',
+            defaultExpanded: true,
+            show: editorPanelsEnabled && isRetention,
+            editorFilters: [{ key: 'retention-condition', component: RetentionCondition }],
+        },
+        {
+            title: 'Calculation options',
+            defaultExpanded: false,
+            show: editorPanelsEnabled && isRetention,
+            editorFilters: [{ key: 'retention-options', component: RetentionOptions }],
+        },
+        // Classic path: General group (all insight types except panels+retention)
+        {
+            title: 'General',
+            show: !(editorPanelsEnabled && isRetention),
+            ...(editorPanelsEnabled ? { defaultExpanded: true } : {}),
+            editorFilters: visibleFilters([
+                {
+                    key: 'retention-condition',
+                    label: 'Retention condition',
+                    component: RetentionCondition,
+                    show: isRetention,
+                },
+                {
+                    key: 'retention-options',
+                    label: 'Calculation options',
+                    component: RetentionOptions,
+                    show: isRetention,
+                },
+                { key: 'query-steps', component: FunnelsQuerySteps, show: isFunnels },
+                { key: 'event-types', label: 'Event Types', component: PathsEventsTypes, show: isPaths },
+                { key: 'hogql', label: 'SQL Expression', component: PathsHogQL, show: isPaths && !!hasPathsHogQL },
+                {
+                    key: 'wildcard-groups',
+                    label: 'Wildcard Groups',
+                    showOptional: true,
+                    component: PathsWildcardGroups,
+                    show: isPaths && hasPathsAdvanced,
+                    tooltip: (
+                        <>
+                            Use wildcard matching to group events by unique values in path item names. Use an asterisk
+                            (*) in place of unique values. For example, instead of /merchant/1234/payment, replace the
+                            unique value with an asterisk /merchant/*/payment.{' '}
+                            <b>Use a comma to separate multiple wildcards.</b>
+                        </>
+                    ),
+                },
+                { key: 'start-target', label: 'Starts at', component: PathsTargetStart, show: isPaths },
+                { key: 'ends-target', label: 'Ends at', component: PathsTargetEnd, show: isPaths && hasPathsAdvanced },
+            ]),
+        },
         {
             title: 'Series',
             ...(editorPanelsEnabled ? { defaultExpanded: true, collapsedSummary: seriesSummary } : {}),
