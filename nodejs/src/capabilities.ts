@@ -234,5 +234,9 @@ export function getPluginServerCapabilities(
             // These modes are handled by IngestionGeneralServer (see index.ts) and should
             // never reach this function
             throw new Error(`Mode ${mode} is handled by IngestionGeneralServer, not PluginServer`)
+        case PluginServerMode.cdp_hogflow_scheduler:
+            return {
+                cdpHogflowScheduler: true,
+            }
     }
 }

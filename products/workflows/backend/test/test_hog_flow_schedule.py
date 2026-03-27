@@ -1,7 +1,13 @@
+from datetime import UTC, datetime
+
 from posthog.test.base import APIBaseTest
+
+from django.test import override_settings
 
 from parameterized import parameterized
 from rest_framework import status
+
+from posthog.models.hog_flow.hog_flow import HogFlow
 
 from products.workflows.backend.models.hog_flow_schedule import HogFlowSchedule
 
@@ -139,3 +145,136 @@ class TestHogFlowScheduleAPI(APIBaseTest):
 
         schedule = HogFlowSchedule.objects.get(id=response.json()["id"])
         assert schedule.timezone == "US/Eastern"
+
+
+@override_settings(INTERNAL_API_SECRET="test-secret")
+class TestProcessDueSchedules(APIBaseTest):
+    INTERNAL_URL = "/api/internal/hog_flows/process_due_schedules"
+
+    def _create_workflow_with_schedule(
+        self, next_run_at=None, rrule="FREQ=HOURLY;INTERVAL=1", schedule_status="active", starts_at=None
+    ):
+        hog_flow = HogFlow.objects.create(
+            team=self.team,
+            name="Test Workflow",
+            status="active",
+            trigger=BATCH_TRIGGER,
+            actions=[],
+            variables=[{"key": "greeting", "default": "Hello"}],
+        )
+        schedule = HogFlowSchedule.objects.create(
+            team=self.team,
+            hog_flow=hog_flow,
+            rrule=rrule,
+            starts_at=starts_at or datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC),
+            timezone="UTC",
+            status=schedule_status,
+            next_run_at=next_run_at,
+        )
+        return hog_flow, schedule
+
+    def _post(self):
+        return self.client.post(
+            self.INTERNAL_URL,
+            content_type="application/json",
+            HTTP_X_INTERNAL_API_SECRET="test-secret",
+        )
+
+    def test_due_schedule_is_processed_and_next_run_at_advanced(self):
+        hog_flow, schedule = self._create_workflow_with_schedule(
+            next_run_at=datetime(2020, 1, 1, tzinfo=UTC),
+        )
+        response = self._post()
+        assert response.status_code == 200
+
+        data = response.json()
+        assert len(data["processed"]) == 1
+        assert data["processed"][0]["hog_flow_id"] == str(hog_flow.id)
+        assert data["processed"][0]["variables"]["greeting"] == "Hello"
+
+        schedule.refresh_from_db()
+        assert schedule.next_run_at is not None
+        assert schedule.next_run_at > datetime(2020, 1, 1, tzinfo=UTC)
+
+    def test_inactive_workflow_clears_next_run_at(self):
+        hog_flow, schedule = self._create_workflow_with_schedule(
+            next_run_at=datetime(2020, 1, 1, tzinfo=UTC),
+        )
+        hog_flow.status = "draft"
+        hog_flow.save()
+
+        response = self._post()
+        assert response.status_code == 200
+        assert len(response.json()["processed"]) == 0
+
+        schedule.refresh_from_db()
+        assert schedule.next_run_at is None
+
+    def test_uninitialized_schedule_gets_next_run_at(self):
+        _, schedule = self._create_workflow_with_schedule(next_run_at=None)
+        response = self._post()
+        assert response.status_code == 200
+        assert str(schedule.id) in response.json()["initialized"]
+
+        schedule.refresh_from_db()
+        assert schedule.next_run_at is not None
+
+    def test_exhausted_rrule_marks_schedule_completed(self):
+        _, schedule = self._create_workflow_with_schedule(
+            next_run_at=datetime(2020, 1, 1, tzinfo=UTC),
+            starts_at=datetime(2019, 12, 31, tzinfo=UTC),
+            rrule="FREQ=DAILY;COUNT=1",
+        )
+        response = self._post()
+        assert response.status_code == 200
+
+        schedule.refresh_from_db()
+        assert schedule.status == "completed"
+        assert schedule.next_run_at is None
+
+    def test_bad_rrule_appears_in_failed(self):
+        _, schedule = self._create_workflow_with_schedule(
+            next_run_at=datetime(2020, 1, 1, tzinfo=UTC),
+            rrule="INVALID_RRULE",
+        )
+        response = self._post()
+        assert response.status_code == 200
+        assert str(schedule.id) in response.json()["failed"]
+        assert len(response.json()["processed"]) == 0
+
+    def test_no_due_schedules_returns_empty(self):
+        self._create_workflow_with_schedule(
+            next_run_at=datetime(2099, 1, 1, tzinfo=UTC),
+        )
+        response = self._post()
+        assert response.status_code == 200
+        assert len(response.json()["processed"]) == 0
+        assert len(response.json()["initialized"]) == 0
+        assert len(response.json()["failed"]) == 0
+
+    def test_schedule_with_variable_overrides_resolves_correctly(self):
+        hog_flow, schedule = self._create_workflow_with_schedule(
+            next_run_at=datetime(2020, 1, 1, tzinfo=UTC),
+        )
+        schedule.variables = {"greeting": "Overridden", "extra": "value"}
+        schedule.save()
+
+        response = self._post()
+        assert response.status_code == 200
+
+        variables = response.json()["processed"][0]["variables"]
+        assert variables["greeting"] == "Overridden"
+        assert variables["extra"] == "value"
+
+    def test_multiple_due_schedules_processed_independently(self):
+        self._create_workflow_with_schedule(next_run_at=datetime(2020, 1, 1, tzinfo=UTC))
+        self._create_workflow_with_schedule(next_run_at=datetime(2020, 1, 1, tzinfo=UTC))
+        self._create_workflow_with_schedule(
+            next_run_at=datetime(2020, 1, 1, tzinfo=UTC),
+            rrule="INVALID",
+        )
+
+        response = self._post()
+        assert response.status_code == 200
+        assert len(response.json()["processed"]) == 2
+        assert len(response.json()["failed"]) == 1
