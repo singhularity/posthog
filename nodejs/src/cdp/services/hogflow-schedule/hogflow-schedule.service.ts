@@ -15,7 +15,6 @@ interface ProcessedSchedule {
     schedule_id: string
     team_id: number
     hog_flow_id: string
-    trigger_type: string
     filters: Record<string, unknown>
     variables: Record<string, unknown>
 }
@@ -94,9 +93,7 @@ export class HogFlowScheduleService {
 
             for (const schedule of data.processed) {
                 try {
-                    if (schedule.trigger_type === 'batch') {
-                        await this.dispatchBatchTrigger(schedule)
-                    }
+                    await this.dispatchBatchTrigger(schedule)
                 } catch (err) {
                     logger.error('HogFlowScheduleService: failed to dispatch schedule', {
                         scheduleId: schedule.schedule_id,
