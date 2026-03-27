@@ -58,7 +58,6 @@ import {
     AvailableFeature,
     ChartDisplayType,
     EditorFilterProps,
-    InsightEditorFilter,
     InsightEditorFilterGroup,
     PathType,
     PropertyGroupFilter,
@@ -68,6 +67,7 @@ import { Breakdown } from './Breakdown'
 import { CumulativeStickinessFilter } from './CumulativeStickinessFilter'
 import { EditorFilterGroup } from './EditorFilterGroup'
 import { EditorFiltersShell } from './EditorFiltersShell'
+import { visibleFilters } from './editorFilterUtils'
 import { GlobalAndOrFilters } from './GlobalAndOrFilters'
 import { LifecycleToggles } from './LifecycleToggles'
 import { SessionAnalysisWarning } from './SessionAnalysisWarning'
@@ -172,102 +172,76 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
     const exclusionCount = editorPanelsEnabled && isPaths ? (pathsFilter?.excludeEvents?.length ?? 0) : 0
     const exclusionsSummary = exclusionCount > 0 ? pluralize(exclusionCount, 'exclusion') : null
 
+    // When panels are enabled and showing retention, split into two top-level groups instead of nesting in General
     const leftEditorFilterGroups: InsightEditorFilterGroup[] = [
         ...(editorPanelsEnabled && isRetention
             ? [
                   {
                       title: 'Retention condition',
                       defaultExpanded: true,
-                      editorFilters: [
-                          {
-                              key: 'retention-condition',
-                              component: RetentionCondition,
-                          },
-                      ],
+                      editorFilters: [{ key: 'retention-condition', component: RetentionCondition }],
                   },
                   {
                       title: 'Calculation options',
                       defaultExpanded: false,
-                      editorFilters: [
-                          {
-                              key: 'retention-options',
-                              component: RetentionOptions,
-                          },
-                      ],
+                      editorFilters: [{ key: 'retention-options', component: RetentionOptions }],
                   },
               ]
             : [
                   {
                       title: 'General',
                       ...(editorPanelsEnabled ? { defaultExpanded: true } : {}),
-                      editorFilters: filterFalsy([
-                          ...(!editorPanelsEnabled && isRetention
-                              ? [
-                                    {
-                                        key: 'retention-condition',
-                                        label: 'Retention condition',
-                                        component: RetentionCondition,
-                                    },
-                                    {
-                                        key: 'retention-options',
-                                        label: 'Calculation options',
-                                        component: RetentionOptions,
-                                    },
-                                ]
-                              : []),
-                          isFunnels
-                              ? {
-                                    key: 'query-steps',
-                                    component: FunnelsQuerySteps,
-                                }
-                              : null,
-                          ...(isPaths
-                              ? [
-                                    {
-                                        key: 'event-types',
-                                        label: 'Event Types',
-                                        component: PathsEventsTypes,
-                                    },
-                                    hasPathsHogQL && {
-                                        key: 'hogql',
-                                        label: 'SQL Expression',
-                                        component: PathsHogQL,
-                                    },
-                                    hasPathsAdvanced && {
-                                        key: 'wildcard-groups',
-                                        label: 'Wildcard Groups',
-                                        showOptional: true,
-                                        component: PathsWildcardGroups,
-                                        tooltip: (
-                                            <>
-                                                Use wildcard matching to group events by unique values in path item
-                                                names. Use an asterisk (*) in place of unique values. For example,
-                                                instead of /merchant/1234/payment, replace the unique value with an
-                                                asterisk /merchant/*/payment.{' '}
-                                                <b>Use a comma to separate multiple wildcards.</b>
-                                            </>
-                                        ),
-                                    },
-                                    {
-                                        key: 'start-target',
-                                        label: 'Starts at',
-                                        component: PathsTargetStart,
-                                    },
-                                    hasPathsAdvanced && {
-                                        key: 'ends-target',
-                                        label: 'Ends at',
-                                        component: PathsTargetEnd,
-                                    },
-                                ]
-                              : []),
+                      editorFilters: visibleFilters([
+                          {
+                              key: 'retention-condition',
+                              label: 'Retention condition',
+                              component: RetentionCondition,
+                              show: isRetention,
+                          },
+                          {
+                              key: 'retention-options',
+                              label: 'Calculation options',
+                              component: RetentionOptions,
+                              show: isRetention,
+                          },
+                          { key: 'query-steps', component: FunnelsQuerySteps, show: isFunnels },
+                          { key: 'event-types', label: 'Event Types', component: PathsEventsTypes, show: isPaths },
+                          {
+                              key: 'hogql',
+                              label: 'SQL Expression',
+                              component: PathsHogQL,
+                              show: isPaths && !!hasPathsHogQL,
+                          },
+                          {
+                              key: 'wildcard-groups',
+                              label: 'Wildcard Groups',
+                              showOptional: true,
+                              component: PathsWildcardGroups,
+                              show: isPaths && hasPathsAdvanced,
+                              tooltip: (
+                                  <>
+                                      Use wildcard matching to group events by unique values in path item names. Use an
+                                      asterisk (*) in place of unique values. For example, instead of
+                                      /merchant/1234/payment, replace the unique value with an asterisk
+                                      /merchant/*/payment. <b>Use a comma to separate multiple wildcards.</b>
+                                  </>
+                              ),
+                          },
+                          { key: 'start-target', label: 'Starts at', component: PathsTargetStart, show: isPaths },
+                          {
+                              key: 'ends-target',
+                              label: 'Ends at',
+                              component: PathsTargetEnd,
+                              show: isPaths && hasPathsAdvanced,
+                          },
                       ]),
                   },
               ]),
         {
             title: 'Series',
             ...(editorPanelsEnabled ? { defaultExpanded: true, collapsedSummary: seriesSummary } : {}),
-            editorFilters: filterFalsy([
-                isTrendsLike && {
+            editorFilters: visibleFilters([
+                {
                     key: 'series',
                     label:
                         !editorPanelsEnabled &&
@@ -277,14 +251,14 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
                             ? TrendsSeriesLabel
                             : undefined,
                     component: TrendsSeries,
+                    show: isTrendsLike,
                 },
-                !editorPanelsEnabled && isTrends && hasFormula && display !== ChartDisplayType.BoxPlot
-                    ? {
-                          key: 'formula',
-                          label: 'Formula',
-                          component: TrendsFormula,
-                      }
-                    : null,
+                {
+                    key: 'formula',
+                    label: 'Formula',
+                    component: TrendsFormula,
+                    show: !editorPanelsEnabled && isTrends && hasFormula && display !== ChartDisplayType.BoxPlot,
+                },
             ]),
         },
         {
@@ -296,85 +270,76 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
                       : 'Advanced options'
                 : 'Advanced options',
             ...(editorPanelsEnabled ? { defaultExpanded: false } : {}),
-            editorFilters: filterFalsy([
-                isPaths && {
-                    key: 'paths-advanced',
-                    component: PathsAdvanced,
+            editorFilters: visibleFilters([
+                { key: 'paths-advanced', component: PathsAdvanced, show: isPaths },
+                {
+                    key: 'funnel-step-configuration',
+                    component: FunnelStepConfiguration,
+                    show: isFunnels && editorPanelsEnabled,
                 },
-                isFunnels &&
-                    editorPanelsEnabled && {
-                        key: 'funnel-step-configuration',
-                        component: FunnelStepConfiguration,
-                    },
-                isFunnels && {
-                    key: 'funnels-advanced',
-                    component: FunnelsAdvanced,
-                },
+                { key: 'funnels-advanced', component: FunnelsAdvanced, show: isFunnels },
             ]),
         },
-    ].filter((g): g is InsightEditorFilterGroup => !!g)
+    ]
 
     const rightEditorFilterGroups: InsightEditorFilterGroup[] = [
         {
             title: 'Filters',
             ...(editorPanelsEnabled ? { defaultExpanded: false, collapsedSummary: filtersSummary } : {}),
-            editorFilters: filterFalsy([
-                isLifecycle
-                    ? {
-                          key: 'toggles',
-                          label: 'Lifecycle Toggles',
-                          component: LifecycleToggles as (props: EditorFilterProps) => JSX.Element | null,
-                      }
-                    : null,
-                isStickiness
-                    ? {
-                          key: 'stickinessCriteria',
-                          label: () => (
-                              <div className="flex">
-                                  <span>Stickiness Criteria</span>
-                                  <Tooltip
-                                      closeDelayMs={200}
-                                      title={
-                                          <div className="deprecated-space-y-2">
-                                              <div>
-                                                  The stickiness criteria defines how many times a user must perform an
-                                                  event inside of a given interval in order to be considered "sticky."
-                                              </div>
-                                          </div>
-                                      }
-                                  >
-                                      <IconInfo className="text-xl text-secondary shrink-0 ml-1" />
-                                  </Tooltip>
-                              </div>
-                          ),
-                          component: StickinessCriteria as (props: EditorFilterProps) => JSX.Element | null,
-                      }
-                    : null,
-                isStickiness
-                    ? {
-                          key: 'cumulativeStickiness',
-                          label: () => (
-                              <div className="flex">
-                                  <span>Compute as</span>
-                                  <Tooltip
-                                      closeDelayMs={200}
-                                      title={
-                                          <div className="deprecated-space-y-2">
-                                              <div>
-                                                  Choose how to compute stickiness values. Non-cumulative shows exact
-                                                  numbers for each day count, while cumulative shows users active for at
-                                                  least that many days.
-                                              </div>
-                                          </div>
-                                      }
-                                  >
-                                      <IconInfo className="text-xl text-secondary shrink-0 ml-1" />
-                                  </Tooltip>
-                              </div>
-                          ),
-                          component: CumulativeStickinessFilter as (props: EditorFilterProps) => JSX.Element | null,
-                      }
-                    : null,
+            editorFilters: visibleFilters([
+                {
+                    key: 'toggles',
+                    label: 'Lifecycle Toggles',
+                    component: LifecycleToggles as (props: EditorFilterProps) => JSX.Element | null,
+                    show: isLifecycle,
+                },
+                {
+                    key: 'stickinessCriteria',
+                    label: () => (
+                        <div className="flex">
+                            <span>Stickiness Criteria</span>
+                            <Tooltip
+                                closeDelayMs={200}
+                                title={
+                                    <div className="deprecated-space-y-2">
+                                        <div>
+                                            The stickiness criteria defines how many times a user must perform an event
+                                            inside of a given interval in order to be considered "sticky."
+                                        </div>
+                                    </div>
+                                }
+                            >
+                                <IconInfo className="text-xl text-secondary shrink-0 ml-1" />
+                            </Tooltip>
+                        </div>
+                    ),
+                    component: StickinessCriteria as (props: EditorFilterProps) => JSX.Element | null,
+                    show: isStickiness,
+                },
+                {
+                    key: 'cumulativeStickiness',
+                    label: () => (
+                        <div className="flex">
+                            <span>Compute as</span>
+                            <Tooltip
+                                closeDelayMs={200}
+                                title={
+                                    <div className="deprecated-space-y-2">
+                                        <div>
+                                            Choose how to compute stickiness values. Non-cumulative shows exact numbers
+                                            for each day count, while cumulative shows users active for at least that
+                                            many days.
+                                        </div>
+                                    </div>
+                                }
+                            >
+                                <IconInfo className="text-xl text-secondary shrink-0 ml-1" />
+                            </Tooltip>
+                        </div>
+                    ),
+                    component: CumulativeStickinessFilter as (props: EditorFilterProps) => JSX.Element | null,
+                    show: isStickiness,
+                },
                 {
                     key: 'properties',
                     label: editorPanelsEnabled ? undefined : 'Filters',
@@ -385,133 +350,118 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
         {
             title: 'Breakdown',
             ...(editorPanelsEnabled ? { defaultExpanded: false, collapsedSummary: breakdownSummary } : {}),
-            editorFilters: filterFalsy([
-                hasBreakdown
-                    ? {
-                          key: 'breakdown',
-                          component: Breakdown,
-                      }
-                    : null,
-                hasAttribution
-                    ? {
-                          key: 'attribution',
-                          label: () => (
-                              <div className="flex">
-                                  <span>Breakdown attribution</span>
-                                  <Tooltip
-                                      closeDelayMs={200}
-                                      interactive
-                                      title={
-                                          <div className="deprecated-space-y-2">
-                                              <div>
-                                                  When breaking down funnels, it's possible that the same properties
-                                                  don't exist on every event. For example, if you want to break down by
-                                                  browser on a funnel that contains both frontend and backend events.
-                                              </div>
-                                              <div>
-                                                  In this case, you can choose from which step the properties should be
-                                                  selected from by modifying the attribution type. There are four modes
-                                                  to choose from:
-                                              </div>
-                                              <ul className="list-disc pl-4">
-                                                  <li>
-                                                      First touchpoint: the first property value seen in any of the
-                                                      steps is chosen.
-                                                  </li>
-                                                  <li>
-                                                      Last touchpoint: the last property value seen from all steps is
-                                                      chosen.
-                                                  </li>
-                                                  <li>
-                                                      All steps: the property value must be seen in all steps to be
-                                                      considered in the funnel.
-                                                  </li>
-                                                  <li>
-                                                      Specific step: only the property value seen at the selected step
-                                                      is chosen.
-                                                  </li>
-                                              </ul>
-                                              <div>
-                                                  Read more in the{' '}
-                                                  <Link to="https://posthog.com/docs/product-analytics/funnels#attribution-types">
-                                                      documentation.
-                                                  </Link>
-                                              </div>
-                                          </div>
-                                      }
-                                  >
-                                      <IconInfo className="text-xl text-secondary shrink-0 ml-1" />
-                                  </Tooltip>
-                              </div>
-                          ),
-                          component: Attribution,
-                      }
-                    : null,
+            editorFilters: visibleFilters([
+                { key: 'breakdown', component: Breakdown, show: hasBreakdown },
+                {
+                    key: 'attribution',
+                    label: () => (
+                        <div className="flex">
+                            <span>Breakdown attribution</span>
+                            <Tooltip
+                                closeDelayMs={200}
+                                interactive
+                                title={
+                                    <div className="deprecated-space-y-2">
+                                        <div>
+                                            When breaking down funnels, it's possible that the same properties don't
+                                            exist on every event. For example, if you want to break down by browser on a
+                                            funnel that contains both frontend and backend events.
+                                        </div>
+                                        <div>
+                                            In this case, you can choose from which step the properties should be
+                                            selected from by modifying the attribution type. There are four modes to
+                                            choose from:
+                                        </div>
+                                        <ul className="list-disc pl-4">
+                                            <li>
+                                                First touchpoint: the first property value seen in any of the steps is
+                                                chosen.
+                                            </li>
+                                            <li>
+                                                Last touchpoint: the last property value seen from all steps is chosen.
+                                            </li>
+                                            <li>
+                                                All steps: the property value must be seen in all steps to be considered
+                                                in the funnel.
+                                            </li>
+                                            <li>
+                                                Specific step: only the property value seen at the selected step is
+                                                chosen.
+                                            </li>
+                                        </ul>
+                                        <div>
+                                            Read more in the{' '}
+                                            <Link to="https://posthog.com/docs/product-analytics/funnels#attribution-types">
+                                                documentation.
+                                            </Link>
+                                        </div>
+                                    </div>
+                                }
+                            >
+                                <IconInfo className="text-xl text-secondary shrink-0 ml-1" />
+                            </Tooltip>
+                        </div>
+                    ),
+                    component: Attribution,
+                    show: hasAttribution,
+                },
             ]),
         },
         {
             title: 'Exclusions',
             ...(editorPanelsEnabled ? { defaultExpanded: false, collapsedSummary: exclusionsSummary } : {}),
-            editorFilters: filterFalsy([
-                isPaths && {
+            editorFilters: visibleFilters([
+                {
                     key: 'paths-exclusions',
                     label: 'Exclusions',
                     tooltip: (
                         <>Exclude events from Paths visualisation. You can use wildcard groups in exclusions as well.</>
                     ),
                     component: PathsExclusions,
+                    show: isPaths,
                 },
             ]),
         },
         // Hide advanced options for calendar heatmap
-        display !== ChartDisplayType.CalendarHeatmap
-            ? {
-                  title: 'Advanced options',
-                  defaultExpanded: false,
-                  editorFilters: filterFalsy([
-                      {
-                          key: 'poe',
-                          component: PoeFilter,
-                      },
-                      displayGoalLines && {
-                          key: 'goal-lines',
-                          label: 'Goal lines',
-                          tooltip: (
-                              <>
-                                  Goal lines can be used to highlight specific goals (Revenue, Signups, etc.) or limits
-                                  (Web Vitals, etc.)
-                              </>
-                          ),
-                          component: GoalLines,
-                      },
-                      {
-                          key: 'sampling-deprecation',
-                          component: SamplingDeprecationNotice,
-                      },
-                  ]),
-              }
-            : null,
-    ].filter((group): group is InsightEditorFilterGroup => group !== null)
+        {
+            title: 'Advanced options',
+            defaultExpanded: false,
+            show: display !== ChartDisplayType.CalendarHeatmap,
+            editorFilters: visibleFilters([
+                { key: 'poe', component: PoeFilter },
+                {
+                    key: 'goal-lines',
+                    label: 'Goal lines',
+                    tooltip: (
+                        <>
+                            Goal lines can be used to highlight specific goals (Revenue, Signups, etc.) or limits (Web
+                            Vitals, etc.)
+                        </>
+                    ),
+                    component: GoalLines,
+                    show: displayGoalLines,
+                },
+                { key: 'sampling-deprecation', component: SamplingDeprecationNotice },
+            ]),
+        },
+    ]
+
+    const visibleGroups = (groups: InsightEditorFilterGroup[]): InsightEditorFilterGroup[] =>
+        groups.filter((g) => g.show !== false && g.editorFilters.length > 0)
 
     const filterGroupsGroups = editorPanelsEnabled
         ? [
               {
                   title: 'single',
                   editorFilterGroups: [
-                      ...leftEditorFilterGroups.filter((group) => group.editorFilters.length > 0),
-                      ...rightEditorFilterGroups.filter((group) => group.editorFilters.length > 0),
+                      ...visibleGroups(leftEditorFilterGroups),
+                      ...visibleGroups(rightEditorFilterGroups),
                   ],
               },
           ]
         : [
-              {
-                  title: 'left',
-                  editorFilterGroups: leftEditorFilterGroups.filter((group) => group.editorFilters.length > 0),
-              },
-              {
-                  title: 'right',
-                  editorFilterGroups: rightEditorFilterGroups.filter((group) => group.editorFilters.length > 0),
-              },
+              { title: 'left', editorFilterGroups: visibleGroups(leftEditorFilterGroups) },
+              { title: 'right', editorFilterGroups: visibleGroups(rightEditorFilterGroups) },
           ]
 
     const QueryTypeIcon = QUERY_TYPES_METADATA[query.kind].icon
@@ -623,10 +573,6 @@ export function EditorFilters({ query, showing, embedded }: EditorFiltersProps):
             </MaxTool>
         </div>
     )
-}
-
-function filterFalsy(a: (InsightEditorFilter | false | null | undefined)[]): InsightEditorFilter[] {
-    return a.filter((e): e is InsightEditorFilter => !!e)
 }
 
 export function getFiltersSummary(
