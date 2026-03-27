@@ -748,7 +748,6 @@ class InternalHogFlowViewSet(TeamAndOrgViewSetMixin, LogEntryMixin, AppMetricsMi
                                 "schedule_id": str(schedule.id),
                                 "team_id": schedule.team_id,
                                 "hog_flow_id": str(schedule.hog_flow_id),
-                                "trigger_type": trigger_type,
                                 "filters": (hog_flow.trigger or {}).get("filters", {}),
                                 "variables": resolve_variables(hog_flow, schedule),
                             }
