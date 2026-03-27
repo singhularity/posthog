@@ -1121,11 +1121,11 @@ class TestProperty(BaseTest):
 
         assert self._property_to_expr(
             {"type": "event", "key": "$virt_bot_name", "value": "Google", "operator": "icontains"}, scope="event"
-        ) == self._parse_expr("$virt_bot_name ilike '%Google%'")
+        ) == self._parse_expr("toString($virt_bot_name) ilike '%Google%'")
 
         assert self._property_to_expr(
             {"type": "event", "key": "$virt_traffic_type", "operator": "is_set"}, scope="event"
-        ) == self._parse_expr("$virt_traffic_type is not null")
+        ) == self._parse_expr("$virt_traffic_type != NULL")
 
     def test_virtual_event_properties_boolean_filter(self):
         assert self._property_to_expr(

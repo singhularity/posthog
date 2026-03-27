@@ -544,9 +544,13 @@ class PropertyDefinitionViewSet(
         {
             "id": "$builtin_" + key,
             "name": key,
+            "description": val.get("description", ""),
             "is_numerical": val["type"] == "Numeric",
             "property_type": val["type"],
             "tags": val.get("tags", []),
+            "is_seen_on_filtered_events": None,
+            "verified": False,
+            "hidden": False,
             "virtual": True,
         }
         for (key, val) in CORE_FILTER_DEFINITIONS_BY_GROUP["person_properties"].items()
@@ -557,9 +561,13 @@ class PropertyDefinitionViewSet(
         {
             "id": "$builtin_" + key,
             "name": key,
+            "description": val.get("description", ""),
             "is_numerical": val["type"] == "Numeric",
             "property_type": val["type"],
             "tags": val.get("tags", []),
+            "is_seen_on_filtered_events": None,
+            "verified": False,
+            "hidden": False,
             "virtual": True,
         }
         for (key, val) in CORE_FILTER_DEFINITIONS_BY_GROUP["event_properties"].items()
@@ -570,9 +578,13 @@ class PropertyDefinitionViewSet(
         {
             "id": "$builtin_" + key,
             "name": key,
+            "description": val.get("description", ""),
             "is_numerical": val["type"] == "Numeric",
             "property_type": val["type"],
             "tags": val.get("tags", []),
+            "is_seen_on_filtered_events": None,
+            "verified": False,
+            "hidden": False,
             "virtual": True,
         }
         for (key, val) in CORE_FILTER_DEFINITIONS_BY_GROUP["groups"].items()
@@ -775,6 +787,11 @@ class PropertyDefinitionViewSet(
 
         # Virtual properties exist for events, persons, and groups
         if v.get("type") not in ["event", "person", "group"]:
+            return False
+
+        # Virtual properties don't have real event associations, so exclude them
+        # when filtering by event names
+        if v.get("filter_by_event_names"):
             return False
 
         # explicit name filter  (?properties=a,b,c)
