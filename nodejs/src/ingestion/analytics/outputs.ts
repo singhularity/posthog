@@ -8,3 +8,6 @@ export type HeatmapsOutput = typeof HEATMAPS_OUTPUT
 
 export const ASYNC_OUTPUT = 'async' as const
 export type AsyncOutput = typeof ASYNC_OUTPUT
+
+export const APP_METRICS_OUTPUT = 'app_metrics' as const
+export type AppMetricsOutput = typeof APP_METRICS_OUTPUT

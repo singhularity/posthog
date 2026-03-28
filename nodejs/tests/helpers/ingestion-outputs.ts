@@ -1,4 +1,5 @@
 import {
+    KAFKA_APP_METRICS_2,
     KAFKA_CLICKHOUSE_AI_EVENTS_JSON,
     KAFKA_CLICKHOUSE_HEATMAP_EVENTS,
     KAFKA_EVENTS_JSON,
@@ -8,7 +9,13 @@ import {
     KAFKA_GROUPS,
     KAFKA_INGESTION_WARNINGS,
 } from '../../src/config/kafka-topics'
-import { AI_EVENTS_OUTPUT, ASYNC_OUTPUT, EVENTS_OUTPUT, HEATMAPS_OUTPUT } from '../../src/ingestion/analytics/outputs'
+import {
+    AI_EVENTS_OUTPUT,
+    APP_METRICS_OUTPUT,
+    ASYNC_OUTPUT,
+    EVENTS_OUTPUT,
+    HEATMAPS_OUTPUT,
+} from '../../src/ingestion/analytics/outputs'
 import {
     DLQ_OUTPUT,
     GROUPS_OUTPUT,
@@ -28,5 +35,6 @@ export function createTestIngestionOutputs(kafkaProducer: KafkaProducerWrapper) 
         [OVERFLOW_OUTPUT]: { topic: KAFKA_EVENTS_PLUGIN_INGESTION_OVERFLOW, producer: kafkaProducer },
         [ASYNC_OUTPUT]: { topic: KAFKA_EVENTS_PLUGIN_INGESTION_ASYNC, producer: kafkaProducer },
         [GROUPS_OUTPUT]: { topic: KAFKA_GROUPS, producer: kafkaProducer },
+        [APP_METRICS_OUTPUT]: { topic: KAFKA_APP_METRICS_2, producer: kafkaProducer },
     })
 }

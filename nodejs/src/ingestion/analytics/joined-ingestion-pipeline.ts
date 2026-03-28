@@ -10,6 +10,7 @@ import { TeamManager } from '../../utils/team-manager'
 import { GroupTypeManager } from '../../worker/ingestion/group-type-manager'
 import { BatchWritingGroupStore } from '../../worker/ingestion/groups/batch-writing-group-store'
 import { PersonsStore } from '../../worker/ingestion/persons/persons-store'
+import { EventFilterManager } from '../common/event-filters'
 import { DlqOutput, GroupsOutput, IngestionWarningsOutput, OverflowOutput } from '../common/outputs'
 import { CookielessManager } from '../cookieless/cookieless-manager'
 import { EventPipelineRunnerOptions } from '../event-processing/event-pipeline-options'
@@ -22,7 +23,7 @@ import { OkResultWithContext } from '../pipelines/pipeline.interface'
 import { PipelineConfig } from '../pipelines/result-handling-pipeline'
 import { ok } from '../pipelines/results'
 import { OverflowRedirectService } from '../utils/overflow-redirect/overflow-redirect-service'
-import { AiEventOutput, AsyncOutput, EventOutput, HeatmapsOutput } from './outputs'
+import { AiEventOutput, AppMetricsOutput, AsyncOutput, EventOutput, HeatmapsOutput } from './outputs'
 import {
     PerDistinctIdPipelineConfig,
     PerDistinctIdPipelineInput,
@@ -51,6 +52,7 @@ export interface JoinedIngestionPipelineConfig {
         | OverflowOutput
         | AsyncOutput
         | GroupsOutput
+        | AppMetricsOutput
     >
     splitAiEventsConfig: SplitAiEventsStepConfig
     perDistinctIdOptions: EventPipelineRunnerOptions
@@ -61,6 +63,7 @@ export interface JoinedIngestionPipelineDeps {
     personsStore: PersonsStore
     groupStore: BatchWritingGroupStore
     hogTransformer: HogTransformerService
+    eventFilterManager: EventFilterManager
     eventIngestionRestrictionManager: EventIngestionRestrictionManager
     eventSchemaEnforcementManager: EventSchemaEnforcementManager
     promiseScheduler: PromiseScheduler
@@ -140,6 +143,7 @@ export function createJoinedIngestionPipeline<
         personsStore,
         groupStore,
         hogTransformer,
+        eventFilterManager,
         eventIngestionRestrictionManager,
         eventSchemaEnforcementManager,
         promiseScheduler,
@@ -159,6 +163,8 @@ export function createJoinedIngestionPipeline<
     }
 
     const postTeamConfig: PostTeamPreprocessingSubpipelineConfig = {
+        eventFilterManager,
+        outputs,
         eventIngestionRestrictionManager,
         eventSchemaEnforcementManager,
         eventSchemaEnforcementEnabled,
